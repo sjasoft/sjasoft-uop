@@ -1,9 +1,9 @@
 __author__ = 'samantha'
 
-from uop import db_service
+from sjasoft.uop import db_service
 
 import random
-from uop import db_service
+from sjasoft.uop import db_service
 
 
 class TestContext(db_service.UOPContext):

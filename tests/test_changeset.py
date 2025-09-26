@@ -1,12 +1,12 @@
 __author__ = 'samantha'
 
-from sjautils.tools import lmap
-from sjautils.dicts import diff as dict_diff
-from uopmeta.oid import id_field
-from uop import changeset
-from uopmeta import attr_info
-from uopmeta.schemas.predefined import pkm_schema
-from uopmeta.schemas.meta import (WorkingContext, as_tuple, as_dict,
+from sjasoft.utils.tools import lmap
+from sjasoft.utils.dicts import diff as dict_diff
+from sjasoft.uopmeta.oid import id_field
+from sjasoft.uop import changeset
+from sjasoft.uopmeta import attr_info
+from sjasoft.uopmeta.schemas.predefined import pkm_schema
+from sjasoft.uopmeta.schemas.meta import (WorkingContext, as_tuple, as_dict,
                                   as_meta, tuple_to_meta)
 
 dataset = WorkingContext.from_schema(pkm_schema)

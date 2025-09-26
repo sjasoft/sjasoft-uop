@@ -1,10 +1,10 @@
 
 import uop
 import os
-from uop import db_service
-from uopmeta.schemas import meta
+from sjasoft.uop import db_service
+from sjasoft.uopmeta.schemas import meta
 
-from uopmeta.schemas.predefined import pkm_schema as schema
+from sjasoft.uopmeta.schemas.predefined import pkm_schema as schema
 
 
 

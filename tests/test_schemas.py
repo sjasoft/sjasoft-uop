@@ -1,6 +1,6 @@
-from uopmeta.schemas import meta
-from uop.test.testing import check_all_pass, TestContext
-from uopmeta.schemas.predefined import pkm_schema as schema
+from sjasoft.uopmeta.schemas import meta
+from sjasoft.uop.test.testing import check_all_pass, TestContext
+from sjasoft.uopmeta.schemas.predefined import pkm_schema as schema
 
 
 def check_subs_pass(test, base):

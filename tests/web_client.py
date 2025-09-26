@@ -1,5 +1,5 @@
 import uuid, requests
-from sjautils.tools import plain2cipher
+from sjasoft.utils.tools import plain2cipher
 
 
 class UOPWebClient(object):

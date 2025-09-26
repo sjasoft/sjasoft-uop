@@ -1,6 +1,6 @@
 import asyncio
-from uop.mongo import mongouop
-from uop import db_interface as dbi
+from sjasoft.uop.mongo import mongouop
+from sjasoft.uop import db_interface as dbi
 
 db = mongouop.MongoUOP('pkm_app')
 

@@ -1,10 +1,10 @@
 __author__ = 'samantha'
 
-from uop.test import testing
-from uopmeta.schemas import meta
-from uopmeta.schemas.predefined import pkm_schema
-from uop.collections import crud_kinds, assoc_kinds, meta_kinds, uop_collection_names
-from uop.utils import ca
+from sjasoft.uop.test import testing
+from sjasoft.uopmeta.schemas import meta
+from sjasoft.uopmeta.schemas.predefined import pkm_schema
+from sjasoft.uop.collections import crud_kinds, assoc_kinds, meta_kinds, uop_collection_names
+from sjasoft.uop.utils import ca
 
 
 def crud_names(base):

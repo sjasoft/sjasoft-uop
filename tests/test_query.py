@@ -1,4 +1,4 @@
-from uopmeta.schemas import meta
+from sjasoft.uopmeta.schemas import meta
 
 
 def check_persist(qc):
