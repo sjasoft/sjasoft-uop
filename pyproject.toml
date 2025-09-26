@@ -1,0 +1,24 @@
+[project]
+name = "sjasoft-uop"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Samantha Atkins", email = "samantha@conceptwareinc.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+sjasoft-uop = "sjasoft.uop:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = true
+
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
