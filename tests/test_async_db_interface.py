@@ -28,10 +28,6 @@ credentials = {}
 context = testing.TestContext.fresh_context(**credentials, use_async=True)
 sync_context = context._sync
 
-def random_kind(kind):
-    return getattr(random_data, f'random_{kind}')
-
-
 def get_kind_collection(kind, a_context=context):
     return a_context.get_db_method(kind)
 

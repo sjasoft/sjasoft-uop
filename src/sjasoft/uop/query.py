@@ -15,7 +15,8 @@ def propVal(op, prop, val):
 
 class Q:
     '''
-    Simple query builder trying to app part of what Django has
+    Simple query builder trying to app part of what Django has.  It is primarily used 
+    for building class instance queries without relationships.
     '''
 
     @staticmethod

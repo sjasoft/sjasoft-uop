@@ -2,7 +2,7 @@ from sjasoft.uop.async_path import changeset
 from contextlib import contextmanager
 from sjasoft.utils.category import binary_partition, partition
 from sjasoft.utils.tools import  match_fields
-from sjasoft.utils.url import is_url
+from sjasoft.web.url import is_url
 from sjasoft.uop.query import Q
 from sjasoft.uopmeta.schemas import meta
 from sjasoft.uopmeta.schemas.meta import MetaContext, Grouped, Tagged, \

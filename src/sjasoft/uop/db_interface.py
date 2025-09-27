@@ -2,10 +2,11 @@
 from sjasoft.uop import changeset
 from sjasoft.utils.category import binary_partition, partition
 from sjasoft.utils.tools import match_fields
-from sjasoft.utils.url import is_url
+from sjasoft.web.url import is_url
 from sjasoft.uop import query as query_module
 from sjasoft.uopmeta.schemas.meta import MetaContext, Grouped, Tagged, \
-    Related, kind_map, BaseModel, MetaQuery
+    Related, kind_map, BaseModel, MetaQuery, ClassComponent, AttributeComponent, AndQuery, OrQuery
+
 from sjasoft.uopmeta.schemas import meta
 from sjasoft.uop.query import Q
 from sjasoft.uopmeta import oid
@@ -291,6 +292,7 @@ class Interface(object):
         :param record: whether to insert?
         :return: the object data for persistent WebURL
         '''
+
         results = self.instances_satisfying('WebURL', Q.eq('url', url))
         if results:
             return {'existing': True, 'object': results[0]}
