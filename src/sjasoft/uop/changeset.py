@@ -205,19 +205,10 @@ class NoModChanges(ChangeSetComponent):
         collection.remove(cls._association_db_filter(an_id))
 
 
-class TaggedChanges(NoModChanges):
-    association_type = 'tag'
-    kind = 'tagged'
-
 
 class RelatedChanges(NoModChanges):
     _object_fields = 'object_id', 'subject_id'
     kind = 'related'
-
-
-class GroupedChanges(NoModChanges):
-    _association_type = 'group'
-    kind = 'grouped'
 
 
 class CrudChanges(ChangeSetComponent):
@@ -390,9 +381,7 @@ class ObjectChanges(CrudChanges):
             {'subject_id': uuid}]})
 
     def db_delete_others(self, collections, key):
-        TaggedChanges.delete_object_references(collections.tagged, key)
         RelatedChanges.delete_object_references(collections.related, key)
-        GroupedChanges.delete_object_references(collections.grouped, key)
 
     def delete_class(self, class_id):
 
@@ -411,8 +400,7 @@ class ObjectChanges(CrudChanges):
         """
         super(ObjectChanges, self).delete_from_collections(collections, key)
         RelatedChanges.user_collection(collections).delete_object_references(key)
-        TaggedChanges.user_collection(collections).delete_object_references(key)
-        GroupedChanges.user_collection(collections).delete_object_references(key)
+
 
 
 class RoleChanges(CrudChanges):
@@ -477,8 +465,6 @@ class ClassChanges(CrudChanges):
         """
         ObjectChanges.user_collection(collections).delete_class(key)
         RelatedChanges.user_collection(collections).delete_class(key)
-        TaggedChanges.user_collection(collections).delete_class_reference(key)
-        GroupedChanges.user_collection(collections).delete_class_reference(key)
 
     def handle_delete(self, identifier, in_changeset):
         in_changeset.objects.delete_class(identifier)
@@ -501,11 +487,8 @@ class ChangeSet(object):
         roles=RoleChanges,
         tags=TagChanges,
         groups=GroupChanges,
-        grouped=GroupedChanges,
         classes=ClassChanges,
         attributes=AttributeChanges,
-        tagged=TaggedChanges,
-        related=RelatedChanges,
         queries=QueryChanges
     )
 
@@ -518,10 +501,8 @@ class ChangeSet(object):
         self.roles = RoleChanges(self, data.get('roles'))
         self.tags = TagChanges(self, data.get('tags'))
         self.groups = GroupChanges(self, data.get('groups'))
-        self.grouped = GroupedChanges(self, data.get('grouped'))
         self.classes = ClassChanges(self, data.get('classes'))
         self.attributes = AttributeChanges(self, data.get('attributes'))
-        self.tagged = TaggedChanges(self, data.get('tagged'))
         self.related = RelatedChanges(self, data.get('related'))
         self.queries = QueryChanges(self, data.get('queries'))
 
