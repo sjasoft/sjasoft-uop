@@ -347,8 +347,6 @@ class ObjectChanges(CrudChanges):
         super().delete(identifier, in_changeset)
 
     def handle_delete(self, identifier, in_changeset):
-        in_changeset.tagged.delete_object(identifier)
-        in_changeset.grouped.delete_object(identifier)
         in_changeset.related.delete_object(identifier)
 
     def apply_to_db(self, collections):
@@ -373,8 +371,6 @@ class ObjectChanges(CrudChanges):
             self.db_delete_others(collections, k)
 
     def on_db_delete(self, uuid, collections):
-        collections.grouped.remove({'object_id': uuid}),
-        collections.tagged.remove({'object_id': uuid}),
         collections.related.remove(
             {'$or': [
             {'object_id': uuid},
@@ -423,7 +419,8 @@ class TagChanges(CrudChanges):
     kind = 'tags'
 
     def on_db_delete(self, key, collections):
-        collections.tagged.remove({'assoc_id': key})
+        role_id = collections.roles.by_name['tag_applies']
+        collections.related.remove({'subject_id': key, 'assoc_id': role_id})
 
     def delete(self, identifier, in_changeset=None):
         super(TagChanges, self).delete(identifier, in_changeset)
@@ -434,7 +431,10 @@ class GroupChanges(CrudChanges):
     kind = 'groups'
 
     def on_db_delete(self, key, collections):
-        collections.grouped.remove({'assoc_id': key})
+        role_id = collections.roles.by_name['group_contains']
+        rev_id = collections.roles.by_name['contains_group']
+        collections.related.remove({'subject_id': key, 'assoc_id': role_id})
+        collections.related.remove({'object_id': key, 'assoc_id': rev_id})
 
     def delete(self, identifier, in_changeset=None):
         super(GroupChanges, self).delete(identifier, in_changeset)
@@ -452,8 +452,6 @@ class ClassChanges(CrudChanges):
     def on_db_delete(self, key, collections):
         obj_check = collections.grouped.column_class_check('object_id', key)
         subject_check = collections.grouped.column_class_check('subject_id', key)
-        collections.grouped.remove(obj_check)
-        collections.tagged.remove(obj_check)
         collections.related.remove({'$or': [
             obj_check, subject_check]})
 
@@ -469,8 +467,6 @@ class ClassChanges(CrudChanges):
     def handle_delete(self, identifier, in_changeset):
         in_changeset.objects.delete_class(identifier)
         in_changeset.related.delete_class(identifier)
-        in_changeset.tagged.delete_class(identifier)
-        in_changeset.grouped.delete_class(identifier)
 
 class AttributeChanges(CrudChanges):
     kind = 'attributes'
