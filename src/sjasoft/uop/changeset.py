@@ -406,7 +406,7 @@ class RoleChanges(CrudChanges):
         collections.related.remove({'assoc_id': key})
 
     def delete(self, identifier, in_changeset=None):
-        super(RoleChanges, self).delete(identifier, in_changeset)
+        super().delete(identifier, in_changeset)
         in_changeset.related.delete_association(identifier)
 
     def db_not_dup(self, collection, data):
@@ -422,9 +422,6 @@ class TagChanges(CrudChanges):
         role_id = collections.roles.by_name['tag_applies']
         collections.related.remove({'subject_id': key, 'assoc_id': role_id})
 
-    def delete(self, identifier, in_changeset=None):
-        super(TagChanges, self).delete(identifier, in_changeset)
-        in_changeset.tagged.delete_association(identifier)
 
 
 class GroupChanges(CrudChanges):
@@ -436,11 +433,6 @@ class GroupChanges(CrudChanges):
         collections.related.remove({'subject_id': key, 'assoc_id': role_id})
         collections.related.remove({'object_id': key, 'assoc_id': rev_id})
 
-    def delete(self, identifier, in_changeset=None):
-        super(GroupChanges, self).delete(identifier, in_changeset)
-        in_changeset.grouped.delete_association(identifier)
-
-
 class QueryChanges(CrudChanges):
     kind = 'queries'
     pass
@@ -450,8 +442,9 @@ class ClassChanges(CrudChanges):
     kind = 'classes'
 
     def on_db_delete(self, key, collections):
-        obj_check = collections.grouped.column_class_check('object_id', key)
-        subject_check = collections.grouped.column_class_check('subject_id', key)
+        filter = lambda fld:{'$regex': {fld: f'^{key}\\.$'}}
+        obj_check = filter('object_id') 
+        subject_check = filter('subject_id')
         collections.related.remove({'$or': [
             obj_check, subject_check]})
 
