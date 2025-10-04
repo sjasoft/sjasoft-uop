@@ -442,7 +442,7 @@ class ClassChanges(CrudChanges):
     kind = 'classes'
 
     def on_db_delete(self, key, collections):
-        filter = lambda fld:{'$regex': {fld: f'^{key}\\.$'}}
+        filter = lambda fld:{'$regex': {fld: f'^{key}\\.'}}
         obj_check = filter('object_id') 
         subject_check = filter('subject_id')
         collections.related.remove({'$or': [

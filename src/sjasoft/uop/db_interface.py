@@ -87,9 +87,12 @@ class Interface(object):
     @property
     def metacontext(self):
         return self._context
+    
+    def get_metadata(self):
+        return self.raw_db.collections.metadata()
 
     def reload_metacontext(self):
-        coll_meta = self.raw_db.collections.metadata()
+        coll_meta = self.get_metadata()
         self._context = MetaContext.from_data(coll_meta)
 
     def ensure_collections(self):
@@ -742,7 +745,7 @@ class Interface(object):
 
     def metadata(self):
         return dict(
-            classes = self.csshlasses.all(),
+            classes = self.classes.all(),
             roles = self.roles.all(),
             attributes = self.attributes.all(),
             groups = self.groups.all(),
