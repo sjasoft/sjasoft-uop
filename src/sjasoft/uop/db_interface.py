@@ -3,6 +3,7 @@ from sjasoft.uop import changeset
 from sjasoft.utils.category import binary_partition, partition
 from sjasoft.utils.tools import match_fields
 from sjasoft.web.url import is_url
+from sjasoft.utils.data import recurse_set
 from sjasoft.uop import query as query_module
 from sjasoft.uopmeta.schemas.meta import MetaContext, Grouped, Tagged, \
     Related, kind_map, BaseModel, MetaQuery, ClassComponent, AttributeComponent, AndQuery, OrQuery
@@ -86,9 +87,12 @@ class Interface(object):
     @property
     def metacontext(self):
         return self._context
+    
+    def get_metadata(self):
+        return self.raw_db.collections.metadata()
 
     def reload_metacontext(self):
-        coll_meta = self.raw_db.collections.metadata()
+        coll_meta = self.get_metadata()
         self._context = MetaContext.from_data(coll_meta)
 
     def ensure_collections(self):
@@ -410,82 +414,60 @@ class Interface(object):
                 self._cache.set(key, res)
         return res
 
-    def modify_associated(self, kind, current, future, constructor, do_replace=False):
-        future = set(future)
+    def modify_associated_with_role(self, role_id, an_id, desired, reverse=False, do_replace=False):
+        current = self.get_roleset(an_id, role_id, reverse=not reverse)
+        related = lambda some_id: Related(subject_id=some_id, assoc_id=role_id, object_id=an_id)
+        if reverse:
+            related = lambda some_id: Related(subject_id=an_id, assoc_id=role_id, object_id=some_id)
+            
+        to_add = desired - current
+        to_remove = current - desired
         with changes(self) as chng:
-            insert = lambda x: chng.insert(kind, constructor(x))
-            delete = lambda x: chng.delete(kind, constructor(x))
-            map(insert, future - current)
-            if do_replace:
-                map(delete, current - future)
-            return getattr(chng, kind).to_dict()
+            for obj in to_add:
+                chng.insert('related', related(obj))
+            if do_replace:  
+                for obj in to_remove:
+                    chng.delete('related', related(obj))
+        return desired
+    
+    def modify_object_tags(self, object_id, tag_ids, do_replace=False):
+        role_id = self.roles.by_name['tag_applies']
+        return self.modify_associated_with_role(role_id, object_id, tag_ids, do_replace=do_replace)
+    
+    def modify_object_groups(self, object_id, group_ids, do_replace=False):
+        role_id = self.roles.by_name['group_contains']
+        return self.modify_associated_with_role(role_id, object_id, group_ids, do_replace=do_replace)
 
-    def add_object_groups(self, object_id, group_ids):
-        group_ids = filter(self.group_ok, group_ids)
-        return self.modify_associated(
-            'grouped', self.get_object_groups(object_id),
-            group_ids, (lambda group_id: Grouped(assoc_id=group_id, object_id=object_id)))
+    def modify_tag_objects(self, tag_id, object_ids, do_replace=False, reverse=True):
+        role_id = self.roles.by_name['tag_applies']
+        return self.modify_associated_with_role(role_id, tag_id, object_ids, do_replace=do_replace, reverse=reverse)
+    
+    def modify_group_objects(self, group_id, object_ids, do_replace=False, reverse=True):
+        role_id = self.roles.by_name['group_contains']
+        return self.modify_associated_with_role(role_id, group_id, object_ids, do_replace=do_replace, reverse=reverse)
+    
+    def modify_object_related(self, fixed_id, role_id, object_ids, do_replace=False, reverse=False):
+        return self.modify_associated_with_role(role_id, fixed_id, object_ids, do_replace=do_replace, reverse=reverse)
 
-    def set_object_groups(self, object_id, group_ids):
-        group_ids = filter(self.group_ok, group_ids)
-        return self.modify_associated(
-            'grouped', self.get_object_groups(object_id),
-            group_ids, (lambda group_id: Grouped(assoc_id=group_id, object_id=object_id)), True)
+        
+    def groups_in_group(self, group_id):
+        """ get groups contained in group using relations instead of directly
+        """
+        role_id = self.roles.by_name['contains_group']
+        func = lambda gid: self.get_roleset(gid, role_id)
+        return recurse_set(func(group_id), func)
+    
+    def groups_containing_group(self, group_id):
+        """ get groups containing group using relations instead of directly
+        """
+        role_id = self.roles.by_name['contains_group']
+        func = lambda gid: self.get_roleset(gid, role_id, reverse=True)
+        return recurse_set(func(group_id), func)
+
 
     def group_item_check(self, item):
         return (self.group_ok(item)) or (self.object_ok(item))
 
-    def add_group_objects(self, group_id, object_ids):
-
-        object_ids = [o for o in object_ids if self.group_item_check(o)]
-        return self.modify_associated(
-            'grouped', self.objects_in_group(group_id),
-            object_ids, (lambda object_id: Grouped.make(group_id, object_id)))
-
-    def set_group_objects(self, group_id, object_ids):
-        object_ids = [o for o in object_ids if self.group_item_check(o)]
-        return self.modify_associated(
-            'grouped', self.objects_in_group(group_id),
-            object_ids, (lambda object_id: Grouped.make(group_id, object_id)), True)
-
-    def add_object_tags(self, object_id, tag_ids):
-        tag_ids = [t for t in tag_ids if self.tag_ok(t)]
-        return self.modify_associated(
-            'tagged', self.get_object_tags(object_id),
-            tag_ids, (lambda tag_id: Tagged.make(tag_id, object_id)))
-
-    def set_object_tags(self, object_id, tag_ids):
-        tag_ids = [t for t in tag_ids if self.tag_ok(t)]
-        return self.modify_associated(
-            'tagged', self.get_object_tags(object_id),
-            tag_ids, (lambda tag_id: Tagged.make(tag_id, object_id)), True)
-
-    def add_tag_objects(self, tag_id, object_ids):
-        object_ids = [o for o in object_ids if self.object_ok]
-        return self.modify_associated(
-            'tagged', self.get_tagset(tag_id),
-            object_ids, (lambda object_id: Tagged.make(tag_id, object_id)))
-
-    def set_tag_objects(self, tag_id, object_ids):
-        object_ids = filter(self.object_ok, object_ids)
-        return self.modify_associated(
-            'tagged', self.get_tagset(tag_id),
-            object_ids, (lambda object_id: Tagged.make(tag_id, object_id)))
-
-    def add_object_related(self, subject, role_id, object_ids):
-        object_ids = [o for o in object_ids if self.object_ok(o)]
-        return self.modify_associated(
-            'related', self.get_roleset(subject, role_id),
-            object_ids,
-            (lambda object_id: Related.make(subject, role_id, object_id)))
-
-    def set_object_related(self, subject, role_id, object_ids):
-        object_ids = [o for o in object_ids if self.object_ok(o)]
-        return self.modify_associated(
-            'related', self.get_roleset(subject, role_id),
-            object_ids,
-            (lambda object_id: Related.make(subject, role_id, object_id)),
-            True)
 
     def get_all_related_by(self, role_id, reverse=False):
         '''
@@ -510,47 +492,50 @@ class Interface(object):
 
     def get_all_related(self, uuid):
         """
-        All objects related to uuid regardless of relationship role.
+        All objects directly related to uuid regardless of relationship role.
         :param uuid:  the object to find related objects for
         :return: set of object ids of related objects
         """
         res = set(self.related.find({'subject': uuid}, only_cols=['object_id']))
         res.update(self.related.find({'object_id': uuid}, only_cols=['subject']))
-        return res
+        return {r for r in res if oid.has_uuid_form(r)}
 
-    def get_assocset(self, coll, an_id):
-        res = self._cache and self._cache.get(an_id)
-
-        if not res:
-            res = set(coll.find({'assoc_id': an_id}, only_cols=['object_id']))
-            if self._cache:
-                self._cache.set(an_id, res)
-        return res
 
     def get_tagset(self, tag_id, recursive=False):
-        res = self.get_assocset(self.tagged, tag_id)
+        role_id = self.roles.by_name['tag_applies']
+        tags = set(tag_id)
         if recursive:
-            for tid in self.metacontext.subtags(tag_id):
-                res.update(self.get_tagset(tid))
-        return res
+            tags.update(self.metacontext.subtags(tag_id))
+        sets = [self.get_roleset(tid, role_id) for tid in tags]
+        return reduce(lambda a, b: a | b, sets, set())
 
     def get_groupset(self, group_id, recursive=False):
-        res =  self.get_assocset(self.grouped, group_id)
+        role_id = self.roles.by_name['group_contains']
+        groups = set(group_id)
         if recursive:
-            subs = self.metacontext.subgroups(group_id)
-            for gid in subs:
-                res |= self.get_groupset(gid)
-        return res
+            groups.update(self.groups_in_group(group_id))
+        sets = [self.get_roleset(gid, role_id) for gid in groups]
+        return reduce(lambda a, b: a | b, sets, set())
 
 
     def get_object_tags(self, uuid):
-        key = 'tags:%s' % uuid
-        # TODO think on this hack and remember it on changes
-        res = self._cache and self._cache.get(key)
-        if not res:
-            res = set(self.tagged.find({'object_id': uuid}, only_cols=['assoc_id']))
-            if self._cache:
-                self._cache.set(key, res)
+        role_id = self.roles.by_name['tag_applies']
+        res = self.get_roleset(uuid, role_id, reverse=True)
+        return res
+
+    def get_object_groups(self, uuid, recursive=False):
+        '''
+        An object can directly be in various groups.  While
+        these direct groups may be in other groups the object is only directly in
+        the first set.
+        :param uuid:
+        :param recursive:
+        :return:
+        '''
+        role_id = self.roles.by_name['group_contains']
+        res = self.get_roleset(uuid, role_id, reverse=True)
+        if recursive:
+            return recurse_set(res, lambda gid: self.groups_containing_group(gid))
         return res
 
     def tagsets(self, tags):
@@ -558,7 +543,7 @@ class Interface(object):
         Returns dict with tag_ids as keys and list objects having
         tag as value.
         """
-        tagsets = asyncio.gather(*[self.get_tagset(t) for t in tags])
+        tagsets = [self.get_tagset(t) for t in tags]
         res = zip(tags, [list(ts) for ts in tagsets])
         return dict(res)
 
@@ -576,7 +561,7 @@ class Interface(object):
         """
         Returns dict with group_ids as keys and list objects directly in group as value.
         """
-        sets = [self.get_tagset(t) for t in groups]
+        sets = [self.get_groupset(t) for t in groups]
         res = zip(groups, [list(items) for items in sets])
         return dict(res)
 
@@ -591,46 +576,13 @@ class Interface(object):
         return {}
 
     def objects_in_group(self, group_id, transitive=False):
-        res = set()
+        role_id = self.roles.by_name['group_contains']
+        groups = set(group_id)
+        if transitive:
+            groups.update(self.groups_in_group(group_id))
+        sets = [self.get_roleset(gid, role_id) for gid in groups]
+        return reduce(lambda a, b: a | b, sets, set())
 
-        def do_group(a_group):
-            objs = self.grouped.find({'assoc_id': a_group})
-            groups, objects = binary_partition(objs, lambda x: x['is_group'])
-            objects = [x['object_id'] for x in objects]
-            res.update(objects)
-            if groups and transitive:
-                for group in groups:
-                    do_group(group['object_id'])
-
-        do_group(group_id)
-        return res
-
-    def get_object_groups(self, uuid, recursive=False):
-        '''
-        What does this mean? An object can directly be in various groups.  While
-        these direct groups may be in other groups the object is only directly in
-        the first set.
-        :param uuid:
-        :param recursive:
-        :return:
-        '''
-        key = 'groups:%s' % uuid
-        res = self._cache and self._cache.get(key)
-        if not res:
-            res = set()
-
-            def get_local_groups(item):
-                return self.grouped.find({'object_id': item}, only_cols=['assoc_id'])
-
-            groups = get_local_groups(uuid)
-            if groups:
-                if self._cache:
-                    self._cache.set(key, groups)
-                res.update(groups)
-                if recursive:
-                    for group_id in groups:
-                        res.update(self.metacontext.subgroups(group_id))
-        return list(res)
 
     def _ensure_dict(self, d):
         if isinstance(d, BaseModel):
@@ -680,14 +632,12 @@ class Interface(object):
             chng.delete(kind, id_or_data)
 
     def tag(self, oid, tag):
-        data = Tagged(assoc_id=tag, object_id=oid)
-        # TODO this db check for existence so many places seems expensive.
-        if not self.tagged.exists(data.without_kind()):
-            return self.meta_insert(data)
-        return data
+        role_id = self.roles.by_name['tag_applies']
+        return self.relate(tag, role_id, oid)
 
     def untag(self, oid, tagid):
-        self.meta_delete('tagged', Tagged(assoc_id=tagid, object_id=oid).dict())
+        role_id = self.roles.by_name['tag_applies']     
+        return self.unrelate(tagid, role_id, oid)
 
     def relate(self, subject_oid, roleid, object_oid):
         data = Related(subject_id=subject_oid, assoc_id=roleid, object_id=object_oid)
@@ -699,13 +649,14 @@ class Interface(object):
         self.meta_delete('related', Related(subject_id=oid, assoc_id=roleid, object_id=other_oid))
 
     def group(self, oid, group_id):
-        data = Grouped(assoc_id=group_id, object_id=oid)
-        if not self.grouped.exists(data.without_kind()):
-            return self.meta_insert(data)
-        return data
+        role_name = 'group_contains' if self.object_ok(oid) else 'contains_group'
+        role_id = self.roles.by_name[role_name]
+        return self.relate(group_id, role_id, oid)
 
     def ungroup(self, oid, group_id):
-        self.meta_delete('grouped', Grouped(assoc_id=group_id, object_id=oid))
+        role_name = 'group_contains' if self.object_ok(oid) else 'contains_group'
+        role_id = self.roles.by_name[role_name]
+        self.unrelate(group_id, role_id, oid)
 
     def _constrain(self, constrainer, data=None, criteria=None, mods=None):
         constrainer(data=data, criteria=criteria, mods=mods, is_admin=self.has_admin_user)
@@ -794,7 +745,7 @@ class Interface(object):
 
     def metadata(self):
         return dict(
-            classes = self.csshlasses.all(),
+            classes = self.classes.all(),
             roles = self.roles.all(),
             attributes = self.attributes.all(),
             groups = self.groups.all(),

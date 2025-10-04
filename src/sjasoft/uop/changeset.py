@@ -205,19 +205,10 @@ class NoModChanges(ChangeSetComponent):
         collection.remove(cls._association_db_filter(an_id))
 
 
-class TaggedChanges(NoModChanges):
-    association_type = 'tag'
-    kind = 'tagged'
-
 
 class RelatedChanges(NoModChanges):
     _object_fields = 'object_id', 'subject_id'
     kind = 'related'
-
-
-class GroupedChanges(NoModChanges):
-    _association_type = 'group'
-    kind = 'grouped'
 
 
 class CrudChanges(ChangeSetComponent):
@@ -356,8 +347,6 @@ class ObjectChanges(CrudChanges):
         super().delete(identifier, in_changeset)
 
     def handle_delete(self, identifier, in_changeset):
-        in_changeset.tagged.delete_object(identifier)
-        in_changeset.grouped.delete_object(identifier)
         in_changeset.related.delete_object(identifier)
 
     def apply_to_db(self, collections):
@@ -382,17 +371,13 @@ class ObjectChanges(CrudChanges):
             self.db_delete_others(collections, k)
 
     def on_db_delete(self, uuid, collections):
-        collections.grouped.remove({'object_id': uuid}),
-        collections.tagged.remove({'object_id': uuid}),
         collections.related.remove(
             {'$or': [
             {'object_id': uuid},
             {'subject_id': uuid}]})
 
     def db_delete_others(self, collections, key):
-        TaggedChanges.delete_object_references(collections.tagged, key)
         RelatedChanges.delete_object_references(collections.related, key)
-        GroupedChanges.delete_object_references(collections.grouped, key)
 
     def delete_class(self, class_id):
 
@@ -411,8 +396,7 @@ class ObjectChanges(CrudChanges):
         """
         super(ObjectChanges, self).delete_from_collections(collections, key)
         RelatedChanges.user_collection(collections).delete_object_references(key)
-        TaggedChanges.user_collection(collections).delete_object_references(key)
-        GroupedChanges.user_collection(collections).delete_object_references(key)
+
 
 
 class RoleChanges(CrudChanges):
@@ -422,7 +406,7 @@ class RoleChanges(CrudChanges):
         collections.related.remove({'assoc_id': key})
 
     def delete(self, identifier, in_changeset=None):
-        super(RoleChanges, self).delete(identifier, in_changeset)
+        super().delete(identifier, in_changeset)
         in_changeset.related.delete_association(identifier)
 
     def db_not_dup(self, collection, data):
@@ -435,23 +419,19 @@ class TagChanges(CrudChanges):
     kind = 'tags'
 
     def on_db_delete(self, key, collections):
-        collections.tagged.remove({'assoc_id': key})
+        role_id = collections.roles.by_name['tag_applies']
+        collections.related.remove({'subject_id': key, 'assoc_id': role_id})
 
-    def delete(self, identifier, in_changeset=None):
-        super(TagChanges, self).delete(identifier, in_changeset)
-        in_changeset.tagged.delete_association(identifier)
 
 
 class GroupChanges(CrudChanges):
     kind = 'groups'
 
     def on_db_delete(self, key, collections):
-        collections.grouped.remove({'assoc_id': key})
-
-    def delete(self, identifier, in_changeset=None):
-        super(GroupChanges, self).delete(identifier, in_changeset)
-        in_changeset.grouped.delete_association(identifier)
-
+        role_id = collections.roles.by_name['group_contains']
+        rev_id = collections.roles.by_name['contains_group']
+        collections.related.remove({'subject_id': key, 'assoc_id': role_id})
+        collections.related.remove({'object_id': key, 'assoc_id': rev_id})
 
 class QueryChanges(CrudChanges):
     kind = 'queries'
@@ -462,10 +442,9 @@ class ClassChanges(CrudChanges):
     kind = 'classes'
 
     def on_db_delete(self, key, collections):
-        obj_check = collections.grouped.column_class_check('object_id', key)
-        subject_check = collections.grouped.column_class_check('subject_id', key)
-        collections.grouped.remove(obj_check)
-        collections.tagged.remove(obj_check)
+        filter = lambda fld:{'$regex': {fld: f'^{key}\\.'}}
+        obj_check = filter('object_id') 
+        subject_check = filter('subject_id')
         collections.related.remove({'$or': [
             obj_check, subject_check]})
 
@@ -477,14 +456,10 @@ class ClassChanges(CrudChanges):
         """
         ObjectChanges.user_collection(collections).delete_class(key)
         RelatedChanges.user_collection(collections).delete_class(key)
-        TaggedChanges.user_collection(collections).delete_class_reference(key)
-        GroupedChanges.user_collection(collections).delete_class_reference(key)
 
     def handle_delete(self, identifier, in_changeset):
         in_changeset.objects.delete_class(identifier)
         in_changeset.related.delete_class(identifier)
-        in_changeset.tagged.delete_class(identifier)
-        in_changeset.grouped.delete_class(identifier)
 
 class AttributeChanges(CrudChanges):
     kind = 'attributes'
@@ -501,11 +476,8 @@ class ChangeSet(object):
         roles=RoleChanges,
         tags=TagChanges,
         groups=GroupChanges,
-        grouped=GroupedChanges,
         classes=ClassChanges,
         attributes=AttributeChanges,
-        tagged=TaggedChanges,
-        related=RelatedChanges,
         queries=QueryChanges
     )
 
@@ -518,10 +490,8 @@ class ChangeSet(object):
         self.roles = RoleChanges(self, data.get('roles'))
         self.tags = TagChanges(self, data.get('tags'))
         self.groups = GroupChanges(self, data.get('groups'))
-        self.grouped = GroupedChanges(self, data.get('grouped'))
         self.classes = ClassChanges(self, data.get('classes'))
         self.attributes = AttributeChanges(self, data.get('attributes'))
-        self.tagged = TaggedChanges(self, data.get('tagged'))
         self.related = RelatedChanges(self, data.get('related'))
         self.queries = QueryChanges(self, data.get('queries'))
 

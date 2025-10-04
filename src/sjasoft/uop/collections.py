@@ -8,8 +8,6 @@ uop_collection_names = dict(
     groups='uop_groups',
     queries='uop_queries',
     related='uop_related',
-    grouped='uop_grouped',
-    tagged='uop_tagged',
     changes='uop_changes',
     databases='uop_database',
     tenants='uop_tenants',
@@ -21,7 +19,7 @@ crud_kinds = ['objects', 'classes', 'attributes', 'roles', 'tags',
               'groups', 'queries']
 meta_kinds = crud_kinds[1:]  # TODO reconsider queries which are mixed!
 internal_kinds = ['database', 'tenants', 'schemas', 'users', 'applications', 'application_tenants']
-assoc_kinds = ['grouped', 'tagged', 'related']
+assoc_kinds = ['related']
 per_tenant_kinds = assoc_kinds + ['changes']
 kinds = crud_kinds + assoc_kinds
 shared_collections = crud_kinds[1:]

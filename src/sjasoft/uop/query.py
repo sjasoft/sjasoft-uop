@@ -18,6 +18,47 @@ class Q:
     Simple query builder trying to app part of what Django has.  It is primarily used 
     for building class instance queries without relationships.
     '''
+    @staticmethod
+    def query_function(query):
+        """
+        Returns a function that can be used to evaluate a query against a dictionary.
+        @param query: the query to evaluate
+        @return: a function that can be used to evaluate a query against a dictionary
+        """
+        def _and(functions: list[callable]):                
+            return lambda x: all(fn(x) for fn in functions)
+    
+        def _or(functions: list[callable]):                
+            return lambda x: any(fn(x) for fn in functions)
+
+        def operator_function(key, value):
+            
+            ops = '$gt', '$lt', '$gte', '$lte', '$eq', '$neq', '$regex'
+            if key != ops:
+                temp = {key: value}
+                key = '$eq'
+                value = temp
+            prop, val = first_kv(value)
+            ops_map = {
+                '$gt': lambda x: x[prop] > val,
+                '$lt': lambda x: x[prop] < val,
+                '$gte': lambda x: x[prop] >= val,
+                '$lte': lambda x: x[prop] <= val,
+                '$eq': lambda x: x[prop] == val,
+                '$neq': lambda x: x[prop] != val,
+                '$regex': lambda x: re.search(val, x[prop]),
+            }
+            return ops_map[key]
+            
+            
+        key, value = first_kv(query)
+        functions = [query_function(i) for i in value] if key in ('$and', '$or') else [operator_function(key, value)]
+        if key == '$and':   
+            return _and(functions)
+        if key == '$or':
+            return _or(functions)
+        else:
+            return functions[0]
 
     @staticmethod
     def gt(prop, val):
