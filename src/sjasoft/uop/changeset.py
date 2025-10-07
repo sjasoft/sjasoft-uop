@@ -4,7 +4,7 @@ from collections import defaultdict
 from sjasoft.uopmeta import oid
 from sjasoft.uopmeta import attr_info
 from sjasoft.uopmeta.schemas.meta import (kind_map, MetaContext, Schema, as_dict as meta_dict,
-                                  as_meta, as_tuple, dict_or_tuple)
+                                  as_meta, as_tuple, dict_or_tuple, Related)
 
 from sjasoft.uopmeta.attr_info import assoc_kinds, meta_kinds, crud_kinds
 from sjasoft.uopmeta.oid import id_field
@@ -42,20 +42,23 @@ class ChangeSetComponent(object):
 
 as_dict = dict_or_tuple
 
-class NoModChanges(ChangeSetComponent):
-    kind = '_'
-    _object_fields = ('object_id',)
+class RelatedChanges(ChangeSetComponent):
+    """
+    Changeset component for related objects. 
+    Only use the meta.Related type for easy consistency in memory
+    converting to/from dict to/from database only
+    """
+    _object_fields = ('object_id', 'subject_id')
     _association_type = ''
 
     @classmethod
     def user_collection(cls, collections):
-        return getattr(collections, cls.kind)
+        return collections.related
 
     def _data_tuple(self, data):
-        fields = list(data['assoc_id'], data['object_id'])
-        if 'subject_id' in data:
-            fields.append(data['subject_id'])
-        return tuple(fields)
+        data = as_dict(data)
+        return tuple(data['assoc_id'], data['object_id'], data['subject_id'])
+
 
     def adjusted_find(self, criteria, results):
         removed = (self._data_tuple(i) for i in self.deleted)
@@ -72,7 +75,7 @@ class NoModChanges(ChangeSetComponent):
     def apply_to_db(self, collections):
         coll = self.user_collection(collections)
         for item in self.inserted:
-            item = dict(item)
+            item = as_dict(item)
             if self.db_not_dup(coll, item):
                 coll.insert(**item)
         for item in self.deleted:
@@ -81,17 +84,20 @@ class NoModChanges(ChangeSetComponent):
             self.on_db_delete(item, collections)
 
     def standardized(self, item):
-        item = as_dict(item)
+        if isinstance(item, Related):
+            return item
+        if isinstance(item, tuple):
+            return Related(assoc_id=item[0], object_id=item[1], subject_id=item[2])
         if isinstance(item, dict):
-            return tuple(item.items())
-        return item
+            return Related(**item)
 
-    def __init__(self, changeset, data=None):
+
+    def __init__(self, changeset, data:dict=None):
         data = data or {}
         items = lambda key: data.get(key, [])
         self.inserted = {self.standardized(d) for d in items('inserted')}
         self.deleted = {self.standardized(d) for d in items('deleted')}
-        ChangeSetComponent.__init__(self, changeset)
+        super().__init__(changeset)
 
     def clear(self):
         self.inserted.clear()
@@ -100,7 +106,7 @@ class NoModChanges(ChangeSetComponent):
     def has_changes(self):
         return any([self.inserted, self.deleted])
 
-    def add_changes(self, other):
+    def add_changes(self, other: 'RelatedChanges'):
         """
         Add subsequent changes to the existing changes
         :param other: the other changeset component
@@ -121,17 +127,15 @@ class NoModChanges(ChangeSetComponent):
         return dict(inserted= dict_list(self.inserted), deleted=dict_list(self.deleted))
 
     def _references_ok(self, data):
-        for field in self._object_fields:
-            oid = as_dict(data).get(field)
-            if self._changeset.object_deleted(oid):
-                return False
-        return True
+        return not self.standardized(data).contains_deleted(self._changeset.objects.deleted, 
+                                                            self._changeset.classes.deleted)
+
 
     def insert(self, data):
         if self._references_ok(data):
             self.inserted.add(self.standardized(data))
 
-    def delete(self, data, unused_changset=None):
+    def delete(self, data):
         if self._references_ok(data):
             data = self.standardized(data)
             if data in self.inserted:
@@ -142,36 +146,22 @@ class NoModChanges(ChangeSetComponent):
     def get_field(self, data, field):
         return data.get(field) if isinstance(data, dict) else getattr(data, field)
 
-    def remove_by_obj_class(self, cls_id, fields):
-        get_cls = lambda item, field: oid.oid_class(self.get_field(item, field))
-        test = lambda item: all([(get_cls(item,k) != cls_id) for k in fields])
 
-        self.inserted = {x for x in self.inserted if test(dict(x))}
-        self.deleted = {x for x in self.deleted if test(dict(x))}
-
-    def memory_filter(self, disallowed_id, fields, additional_extractor=None):
-        is_obj = oid.oid_sep in disallowed_id
-        def getter():
-            simple_getter = lambda item, f: self.get_field(item, f)
-            if additional_extractor:
-                return lambda item, f: additional_extractor(simple_getter(item, f))
-            return simple_getter
-        get_fn = getter()
-        obj_test = lambda obj: obj == disallowed_id
-        cls_test = lambda obj: oid.oid_class(obj) == disallowed_id
-        oid_test = obj_test if is_obj else cls_test
-        test = lambda item: any([oid_test(get_fn(item, k)) for k in fields])
-        self.inserted = {x for x in self.inserted if not test(dict(x))}
-        self.deleted = {x for x in self.deleted if not test(dict(x))}
 
     def delete_object(self, object_id):
-        self.memory_filter(object_id, self._object_fields)
+        test = lambda item: item.object_id == object_id or item.subject_id == object_id
+        self.inserted = {x for x in self.inserted if not test(x)}
+        self.deleted = {x for x in self.deleted if not test(x)}
 
     def delete_class(self, cls_id):
-        self.memory_filter(cls_id, self._object_fields, additional_extractor=lambda x: oid.oid_class(x))
+        test = lambda item: oid.oid_class(item.object_id) == cls_id or oid.oid_class(item.subject_id) == cls_id
+        self.inserted = {x for x in self.inserted if not test(x)}
+        self.deleted = {x for x in self.deleted if not test(x)}
 
     def delete_association(self, assoc_id):
-        self.memory_filter(assoc_id, ['assoc_id'])
+        test = lambda item: item.assoc_id == assoc_id
+        self.inserted = {x for x in self.inserted if not test(x)}
+        self.deleted = {x for x in self.deleted if not test(x)}
 
     @classmethod
     def _db_ref_check(cls, an_id, flds):
@@ -185,12 +175,14 @@ class NoModChanges(ChangeSetComponent):
 
     @classmethod
     def _class_db_filter(cls, cls_id):
-        flds = [('cls_%s' % f) for f in cls._object_fields]
-        return cls._db_ref_check(cls_id, flds)
+        val = f'^{cls_id}\\.'
+        clauses = [{'$regex':{f: val}} for f in cls._object_fields]
+        return {'$or': clauses}
+
 
     @classmethod
     def _association_db_filter(cls, assoc_id):
-        return {'assoc_id': {'$eq': assoc_id}}
+        return {'assoc_id': assoc_id}
 
     @classmethod
     def delete_object_references(cls, collection, objid):
@@ -203,12 +195,6 @@ class NoModChanges(ChangeSetComponent):
     @classmethod
     def delete_association_references(cls, collection, an_id):
         collection.remove(cls._association_db_filter(an_id))
-
-
-
-class RelatedChanges(NoModChanges):
-    _object_fields = 'object_id', 'subject_id'
-    kind = 'related'
 
 
 class CrudChanges(ChangeSetComponent):
@@ -604,6 +590,8 @@ class ChangeSet(object):
         deleted_classes = self.classes.deleted | other_changes.classes.deleted
         ensure_refs = lambda x: not x.contains_deleted(deleted_objects, deleted_classes)
         for kind in assoc_kinds:
+            if kind in ('tagged', 'grouped'):
+                kind = 'related'
             data = getattr(other_changes, kind)
             as_metas = lambda items: [as_meta(kind, d) for d in items]
             for item in filter(ensure_refs, as_metas(data.inserted)):

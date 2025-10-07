@@ -414,7 +414,7 @@ class Interface(object):
                 self._cache.set(key, res)
         return res
 
-    def modify_associated_with_role(self, role_id, an_id, desired, reverse=False, do_replace=False):
+    def modify_associated_with_role(self, role_id, an_id, desired, reverse=False, replace=False):
         current = self.get_roleset(an_id, role_id, reverse=not reverse)
         related = lambda some_id: Related(subject_id=some_id, assoc_id=role_id, object_id=an_id)
         if reverse:
@@ -425,42 +425,43 @@ class Interface(object):
         with changes(self) as chng:
             for obj in to_add:
                 chng.insert('related', related(obj))
-            if do_replace:  
+            if replace:  
                 for obj in to_remove:
                     chng.delete('related', related(obj))
         return desired
     
-    def modify_object_tags(self, object_id, tag_ids, do_replace=False):
-        role_id = self.roles.by_name['tag_applies']
-        return self.modify_associated_with_role(role_id, object_id, tag_ids, do_replace=do_replace)
+    def modify_object_tags(self, object_id, tag_ids, replace=False):
+        role_id = self.roles.name_to_id('tag_applies')
+        return self.modify_associated_with_role(role_id, object_id, tag_ids, replace=replace)
     
-    def modify_object_groups(self, object_id, group_ids, do_replace=False):
-        role_id = self.roles.by_name['group_contains']
-        return self.modify_associated_with_role(role_id, object_id, group_ids, do_replace=do_replace)
+    def modify_tag_objects(self, tag_id, object_ids, replace=False, reverse=True):
+        role_id = self.roles.name_to_id('tag_applies')
+        return self.modify_associated_with_role(role_id, tag_id, object_ids, replace=replace, reverse=reverse)
 
-    def modify_tag_objects(self, tag_id, object_ids, do_replace=False, reverse=True):
-        role_id = self.roles.by_name['tag_applies']
-        return self.modify_associated_with_role(role_id, tag_id, object_ids, do_replace=do_replace, reverse=reverse)
+    def modify_object_groups(self, object_id, group_ids, replace=False):
+        role_id = self.roles.name_to_id('group_contains')
+        return self.modify_associated_with_role(role_id, object_id, group_ids, replace=replace)
+
     
-    def modify_group_objects(self, group_id, object_ids, do_replace=False, reverse=True):
-        role_id = self.roles.by_name['group_contains']
-        return self.modify_associated_with_role(role_id, group_id, object_ids, do_replace=do_replace, reverse=reverse)
+    def modify_group_objects(self, group_id, object_ids, replace=False, reverse=True):
+        role_id = self.roles.name_to_id('group_contains')
+        return self.modify_associated_with_role(role_id, group_id, object_ids, replace=replace, reverse=reverse)
     
-    def modify_object_related(self, fixed_id, role_id, object_ids, do_replace=False, reverse=False):
-        return self.modify_associated_with_role(role_id, fixed_id, object_ids, do_replace=do_replace, reverse=reverse)
+    def modify_object_related(self, fixed_id, role_id, object_ids, replace=False, reverse=False):
+        return self.modify_associated_with_role(role_id, fixed_id, object_ids, replace=replace, reverse=reverse)
 
         
     def groups_in_group(self, group_id):
         """ get groups contained in group using relations instead of directly
         """
-        role_id = self.roles.by_name['contains_group']
+        role_id = self.roles.name_to_id('contains_group')
         func = lambda gid: self.get_roleset(gid, role_id)
         return recurse_set(func(group_id), func)
     
     def groups_containing_group(self, group_id):
         """ get groups containing group using relations instead of directly
         """
-        role_id = self.roles.by_name['contains_group']
+        role_id = self.roles.name_to_id('contains_group')
         func = lambda gid: self.get_roleset(gid, role_id, reverse=True)
         return recurse_set(func(group_id), func)
 
@@ -502,7 +503,7 @@ class Interface(object):
 
 
     def get_tagset(self, tag_id, recursive=False):
-        role_id = self.roles.by_name['tag_applies']
+        role_id = self.roles.name_to_id('tag_applies')
         tags = set(tag_id)
         if recursive:
             tags.update(self.metacontext.subtags(tag_id))
@@ -510,7 +511,7 @@ class Interface(object):
         return reduce(lambda a, b: a | b, sets, set())
 
     def get_groupset(self, group_id, recursive=False):
-        role_id = self.roles.by_name['group_contains']
+        role_id = self.roles.name_to_id('group_contains')
         groups = set(group_id)
         if recursive:
             groups.update(self.groups_in_group(group_id))
@@ -519,7 +520,7 @@ class Interface(object):
 
 
     def get_object_tags(self, uuid):
-        role_id = self.roles.by_name['tag_applies']
+        role_id = self.roles.name_to_id('tag_applies')
         res = self.get_roleset(uuid, role_id, reverse=True)
         return res
 
@@ -532,7 +533,7 @@ class Interface(object):
         :param recursive:
         :return:
         '''
-        role_id = self.roles.by_name['group_contains']
+        role_id = self.roles.name_to_id('group_contains')
         res = self.get_roleset(uuid, role_id, reverse=True)
         if recursive:
             return recurse_set(res, lambda gid: self.groups_containing_group(gid))
@@ -576,7 +577,7 @@ class Interface(object):
         return {}
 
     def objects_in_group(self, group_id, transitive=False):
-        role_id = self.roles.by_name['group_contains']
+        role_id = self.roles.name_to_id('group_contains')
         groups = set(group_id)
         if transitive:
             groups.update(self.groups_in_group(group_id))
@@ -632,7 +633,7 @@ class Interface(object):
             chng.delete(kind, id_or_data)
 
     def tag(self, oid, tag):
-        role_id = self.roles.by_name['tag_applies']
+        role_id = self.roles.name_to_id('tag_applies')
         return self.relate(tag, role_id, oid)
 
     def untag(self, oid, tagid):

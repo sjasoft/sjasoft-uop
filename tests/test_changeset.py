@@ -6,12 +6,17 @@ from sjasoft.uopmeta.oid import id_field
 from sjasoft.uop import changeset
 from sjasoft.uopmeta import attr_info
 from sjasoft.uopmeta.schemas.predefined import pkm_schema
-from sjasoft.uopmeta.schemas.meta import (WorkingContext, as_tuple, as_dict,
-                                  as_meta, tuple_to_meta)
+from sjasoft.uopmeta.schemas.meta import (Related, WorkingContext, as_tuple, as_dict)
 
 dataset = WorkingContext.from_schema(pkm_schema)
 dataset.configure(num_assocs=6)
 lmap2 = lambda fn, *args: [fn(a) for a in args]
+
+def assert_in(a, b):
+    assert a in b, f'{a} should be in {b}'
+
+def assert_not_in(a, b):
+    assert a not in b, f'{a} should not be in {b}'
 
 def crud_insert(cs, kind, items):
     """
@@ -27,7 +32,7 @@ def crud_insert(cs, kind, items):
     target = getattr(cs, kind)
     for item in items:
         cs.insert(kind, item)
-        assert item[id_field] in target.inserted
+        assert_in(item[id_field], target.inserted)
     return cs
 
 def crud_modify(cs, kind, modifications):
@@ -73,7 +78,7 @@ def crud_delete(cs, kind, ids):
         if was_inserted:
             assert an_id not in target.inserted
         elif was_modified:
-            assert an_id not in target.modified
+            assert_not_in(an_id, target.modified)
         assert expect_in_deleted == (an_id in target.deleted)
     return changeset
 
@@ -88,13 +93,30 @@ def assoc_insert(cs, kind, *objects):
     :return:
     """
     target = getattr(cs, kind)
+    if kind in ('tagged', 'grouped'):
+        kind = 'related'
     for data in objects:
         cs.insert(kind, data)
         t_data = as_tuple(data)
         if target._references_ok(data):
-            assert t_data in target.inserted
-        assert t_data not in target.deleted
+            assert_in(t_data, target.inserted)
+        assert_not_in(t_data, target.deleted)
     return cs
+
+def grouped_assoc(group_id, object_id):
+    return dataset.random_related(dataset.roles.by_name['group_contains'], object_id, group_id)
+
+def tagged_assoc(tag_id, object_id):
+    return dataset.random_related(dataset.roles.by_name['tag_applies'], object_id,tag_id)
+
+def related_assoc(role_id, object_id, subject_id):
+    return dataset.random_related(role_id, object_id, subject_id)
+
+assoc_fn = {
+    'grouped': grouped_assoc,
+    'tagged': tagged_assoc,
+    'related': related_assoc
+}
 
 def assoc_delete(cs, kind, *tuples):
     """
@@ -106,17 +128,19 @@ def assoc_delete(cs, kind, *tuples):
     :return: the changeset
     :return:
     """
+    if kind in ('tagged', 'grouped'):
+        kind = 'related'
     target = getattr(cs, kind)
     for data in tuples:
         t_data = tuple(data.items())
         was_present = t_data in target.inserted
         cs.delete(kind, data)
         if was_present:
-            assert t_data not in target.inserted
-            assert t_data not in target.deleted
+            assert_not_in(t_data, target.inserted)
+            assert_not_in(t_data, target.deleted)
         else:
             if target._references_ok(data):
-                assert t_data in target.deleted
+                assert_in(t_data, target.deleted)
     return cs
 
 def kind_objects(kind):
@@ -144,8 +168,8 @@ def full_changeset(starting_at=0):
     for kind in changeset.assoc_kinds:
         objects = kind_objects(kind)
         first, second = objects[starting_at: starting_at + 2]
-        assoc_insert(cs, kind, first)
-        assoc_delete(cs, kind, second)
+        assoc_insert(cs, 'related', first)
+        assoc_delete(cs, 'related', second)
     return cs
 
 def test_conversion():
@@ -220,14 +244,9 @@ def test_delete_object():
     cs.delete('objects', objects[0]['id'])
     for kind, data in [('tagged', list(tagged)), ('grouped', list(grouped)), ('related', list(related))]:
         data = [as_tuple(d) for d in data]
-        assert data[0] not in getattr(cs, kind).inserted
-        assert data[1] in getattr(cs, kind).deleted
+        assert_not_in(data[0], getattr(cs, kind).inserted)
+        assert_in(data[1], getattr(cs, kind).deleted)
 
-def assertIn(a, b):
-    assert a in b
-
-def assertNotIn(a, b):
-    assert a not in b
 
 def test_delete_role():
     cs = changeset.ChangeSet()
@@ -236,25 +255,26 @@ def test_delete_role():
     related = dataset.random_related(role.id, obj['id'], obj['id'])
     assoc_insert(cs, 'related', related)
     cs.delete('roles', role.id)
-    assertNotIn(as_tuple(related), cs.related.inserted)
+    assert_not_in(as_tuple(related), cs.related.inserted)
 
 def test_delete_group():
+    role_id = dataset.roles.by_name['group_contains']
     cs = changeset.ChangeSet()
     group = dataset.random_group()
     obj = dataset.random_instance()
-    grouped = dataset.random_grouped(group.id, obj['id'])
-    assoc_insert(cs, 'grouped', grouped)
+    grouped = dataset.random_related(role_id, group.id, obj['id'])
+    assoc_insert(cs, 'related', grouped)
     cs.delete('groups', group.id)
-    assertNotIn(as_tuple(grouped), cs.grouped.inserted)
+    assert_not_in(as_tuple(grouped), cs.grouped.inserted)
 
 def test_delete_tag():
     cs = changeset.ChangeSet()
     tag = dataset.random_group()
     obj = dataset.random_instance()
     tagged = dataset.random_tagged(tag.id, obj['id'])
-    assoc_insert(cs, 'tagged', tagged)
+    assoc_insert(cs, 'related', tagged)
     crud_delete(cs, 'tags', tag.id)
-    assertNotIn(as_tuple(tagged), cs.tagged.inserted)
+    assert_not_in(as_tuple(tagged), cs.tagged.inserted)
 
 def test_combination():
     cs = full_changeset()
@@ -267,38 +287,52 @@ def test_combination():
             continue
         data = kind_objects(kind)
         cs_data = getattr(combined, kind)
-        assertIn(get_id(data[0]), cs_data.inserted)
-        assertIn(get_id(data[3]), cs_data.inserted)
-        assertIn(get_id(data[1]), cs_data.modified)
-        assertIn(get_id(data[4]), cs_data.modified)
-        assertIn(get_id(data[2]), cs_data.deleted)
-        assertIn(get_id(data[5]), cs_data.deleted)
+        assert_in(get_id(data[0]), cs_data.inserted)
+        assert_in(get_id(data[3]), cs_data.inserted)
+        assert_in(get_id(data[1]), cs_data.modified)
+        assert_in(get_id(data[4]), cs_data.modified)
+        assert_in(get_id(data[2]), cs_data.deleted)
+        assert_in(get_id(data[5]), cs_data.deleted)
 
     deleted_classes = combined.classes.deleted
     deleted_objects = combined.objects.deleted
+    
+    def contains_deleted(assoc, deleted_objects, deleted_classes):
+        object_id = assoc['object_id'] if isinstance(assoc, dict) else assoc.object_id
+        subject_id = assoc['subject_id'] if isinstance(assoc, dict) else assoc.subject_id
+        def contains_object(object_id):
+            return object_id == object_id or subject_id == object_id
+    
+        def contains_class(class_id):
+            prefix = f'{class_id}.'
+            return object_id.startswith(prefix) or subject_id.startswith(prefix)
 
-    def check(assoc, container, opposite_container=None):
-        should_be_in = not assoc.contains_deleted(
+        for obj in deleted_objects:
+            if contains_object(obj):
+                return True
+        for cls in deleted_classes:
+            if contains_class(cls):
+                return True
+        return False
+        
+
+    def check(assoc, inserted, deleted=None):
+        should_be_in = not contains_deleted(assoc,
             deleted_objects, deleted_classes)
-        if opposite_container:  # here to take care of dropped insert/delete
+        if deleted:  # here to take care of dropped insert/delete
             if should_be_in:
-                if assoc not in container:
-                    should_be_in = assoc in opposite_container
+                if assoc not in inserted:
+                    should_be_in = assoc in deleted
         if should_be_in:
-            if not assoc in container:
-                print(assoc, 'should be in', container)
-            assertIn(assoc, container)
+            assert_in(assoc, inserted)
         else:
-            if assoc in container:
-                print(assoc, 'should not be in', container)
-            assertNotIn(assoc, container)
+            assert_not_in(assoc, inserted)
 
-    for kind in changeset.assoc_kinds:
-        data = [tuple_to_meta(d) for d in kind_objects(kind)]
-        cs_data = getattr(combined, kind)
-        inserted = {tuple_to_meta(i) for i in cs_data.inserted}
-        deleted = {tuple_to_meta(d) for d in cs_data.deleted}
-        check(data[0], inserted, deleted)
-        check(data[3], inserted, deleted)
-        check(data[1], deleted, inserted)
-        check(data[4], deleted, inserted)
+    data = [Related(**d) for d in kind_objects('related')]
+    cs_data = combined.related
+    inserted = cs_data.inserted
+    deleted = cs_data.deleted
+    check(data[0], inserted, deleted)
+    check(data[3], inserted, deleted)
+    check(data[1], deleted, inserted)
+    check(data[4], deleted, inserted)
