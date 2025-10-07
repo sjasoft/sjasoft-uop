@@ -25,13 +25,13 @@ from sjasoft.uop.collections import uop_collection_names
 from sjasoft.uop import changeset
 from sjasoft.uopmeta.schemas import meta
 from sjasoft.utils import decorations
-from sjasoft.utils import cw_logging, index
+from sjasoft.utils import logging, index
 import time
 from sjasoft.utils.decorations import abstract
 from collections import defaultdict
 
 comment = defaultdict(set)
-logger = cw_logging.getLogger('uop.database')
+logger = logging.getLogger('uop.database')
 
 
 def id_dictionary(doclist):
@@ -43,7 +43,7 @@ def objects(doclist):
 
 
 class Database(object):
-    database_by_id = {}
+    database_by_id:dict = {}
     _meta_id_tree = None
     db_info_collection = 'uop_database'
 
@@ -62,7 +62,7 @@ class Database(object):
         pass
 
     @classmethod
-    def with_id(cls, idnum):
+    def with_id(cls, idnum:str):
         return cls.database_by_id.get(idnum)
 
     @abstract

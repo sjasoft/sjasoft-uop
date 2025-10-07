@@ -5,6 +5,10 @@ import asyncio
 
 
 class DirectConnection(generic.GenericConnection):
+    @classmethod
+    def get_connection(cls, db_type, db_name, tenant_id=None, **db_params):
+        service, context = db_service.get_uop_service(db_type=db_type, db_name=db_name, use_async=False, tenant_id=tenant_id,  **db_params)
+        return cls(service, context, tenant_id)
 
     @classmethod
     async def get_connection(cls, db_type, db_name, tenant_id=None, **db_params):
@@ -55,7 +59,7 @@ class DirectConnection(generic.GenericConnection):
 
     def login_tenant(self, tenant_name, password):  # TODO JWT
         self._tenant = self._service.login_tenant(tenant_name, password)
-        self._db = self._service.get_tenant_interface(self._tenante['_id'])
+        self._db = self._service.get_tenant_interface(self._tenant['_id'])
 
     def metacontext(self):
         return self._context.metacontext

@@ -92,15 +92,14 @@ def assoc_insert(cs, kind, *objects):
     :return: the changeset
     :return:
     """
-    target = getattr(cs, kind)
     if kind in ('tagged', 'grouped'):
         kind = 'related'
+    target = getattr(cs, kind)
     for data in objects:
         cs.insert(kind, data)
-        t_data = as_tuple(data)
         if target._references_ok(data):
-            assert_in(t_data, target.inserted)
-        assert_not_in(t_data, target.deleted)
+            assert_in(data, target.inserted)
+        assert_not_in(data, target.deleted)
     return cs
 
 def grouped_assoc(group_id, object_id):
@@ -118,7 +117,7 @@ assoc_fn = {
     'related': related_assoc
 }
 
-def assoc_delete(cs, kind, *tuples):
+def assoc_delete(cs, kind, *assocs):
     """
     Delete from (and test) changest association component.
 
@@ -131,23 +130,22 @@ def assoc_delete(cs, kind, *tuples):
     if kind in ('tagged', 'grouped'):
         kind = 'related'
     target = getattr(cs, kind)
-    for data in tuples:
-        t_data = tuple(data.items())
-        was_present = t_data in target.inserted
+    for data in assocs:
+        was_present = data in target.inserted
         cs.delete(kind, data)
         if was_present:
-            assert_not_in(t_data, target.inserted)
-            assert_not_in(t_data, target.deleted)
+            assert_not_in(data, target.inserted)
+            assert_not_in(data, target.deleted)
         else:
             if target._references_ok(data):
-                assert_in(t_data, target.deleted)
+                assert_in(data, target.deleted)
     return cs
 
 def kind_objects(kind):
     raw = getattr(dataset, kind)
     if not isinstance(raw, list):
         raw = raw.by_name.values()
-    return [as_dict(r) for r in raw]
+    return [r for r in raw]
 
 def kind_items(kind):
     return [as_dict(r) for r in kind_objects(kind)]
@@ -214,13 +212,11 @@ def test_delete_class():
     grouped = lmap(group_it, (instance, instance2))
     related = lmap(relate_it, (instance, instance3), (instance3, instance))
     for kind, data in [('tagged', list(tagged)), ('grouped', list(grouped)), ('related', list(related))]:
-        data = [as_dict(d) for d in data]
         assoc_insert(cs, kind, data[0])
         assoc_delete(cs, kind, data[1])
     cs.delete('classes', cls.id)
     for kind, data in [('tagged', list(tagged)), ('grouped', list(grouped)), ('related', list(related))]:
-        what = getattr(cs, kind)
-        data = [as_tuple(d) for d in data]
+        what = cs.related
         assert data[0] not in what.inserted
         assert data[1] not in what.deleted
 
@@ -238,14 +234,12 @@ def test_delete_object():
     grouped = lmap(group_it, oids[:2])
     related = lmap(relate_it, (oids[0], oids[1]), (oids[1], oids[2]))
     for kind, data in [('tagged', tagged), ('grouped', grouped), ('related', related)]:
-        data = [as_dict(d) for d in data]
         assoc_insert(cs, kind, data[0])
         assoc_delete(cs, kind, data[1])
     cs.delete('objects', objects[0]['id'])
     for kind, data in [('tagged', list(tagged)), ('grouped', list(grouped)), ('related', list(related))]:
-        data = [as_tuple(d) for d in data]
-        assert_not_in(data[0], getattr(cs, kind).inserted)
-        assert_in(data[1], getattr(cs, kind).deleted)
+        assert_not_in(data[0], getattr(cs, 'related').inserted)
+        assert_in(data[1], getattr(cs, 'related').deleted)
 
 
 def test_delete_role():
@@ -255,17 +249,17 @@ def test_delete_role():
     related = dataset.random_related(role.id, obj['id'], obj['id'])
     assoc_insert(cs, 'related', related)
     cs.delete('roles', role.id)
-    assert_not_in(as_tuple(related), cs.related.inserted)
+    assert_not_in(related, cs.related.inserted)
 
 def test_delete_group():
-    role_id = dataset.roles.by_name['group_contains']
+    role_id = dataset.roles.name_to_id('group_contains')
     cs = changeset.ChangeSet()
     group = dataset.random_group()
     obj = dataset.random_instance()
     grouped = dataset.random_related(role_id, group.id, obj['id'])
     assoc_insert(cs, 'related', grouped)
     cs.delete('groups', group.id)
-    assert_not_in(as_tuple(grouped), cs.grouped.inserted)
+    assert_not_in(grouped, cs.related.inserted)
 
 def test_delete_tag():
     cs = changeset.ChangeSet()
@@ -274,7 +268,7 @@ def test_delete_tag():
     tagged = dataset.random_tagged(tag.id, obj['id'])
     assoc_insert(cs, 'related', tagged)
     crud_delete(cs, 'tags', tag.id)
-    assert_not_in(as_tuple(tagged), cs.tagged.inserted)
+    assert_not_in(tagged, cs.related.inserted)
 
 def test_combination():
     cs = full_changeset()
@@ -328,7 +322,7 @@ def test_combination():
         else:
             assert_not_in(assoc, inserted)
 
-    data = [Related(**d) for d in kind_objects('related')]
+    data = kind_objects('related')
     cs_data = combined.related
     inserted = cs_data.inserted
     deleted = cs_data.deleted

@@ -135,7 +135,7 @@ class RelatedChanges(ChangeSetComponent):
         if self._references_ok(data):
             self.inserted.add(self.standardized(data))
 
-    def delete(self, data):
+    def delete(self, data, in_changeset=None):
         if self._references_ok(data):
             data = self.standardized(data)
             if data in self.inserted:
@@ -162,6 +162,10 @@ class RelatedChanges(ChangeSetComponent):
         test = lambda item: item.assoc_id == assoc_id
         self.inserted = {x for x in self.inserted if not test(x)}
         self.deleted = {x for x in self.deleted if not test(x)}
+
+    def delete_matching(self, criteria):
+        self.inserted = {x for x in self.inserted if not criteria(x)}
+        self.deleted = {x for x in self.deleted if not criteria(x)}
 
     @classmethod
     def _db_ref_check(cls, an_id, flds):
@@ -408,6 +412,9 @@ class TagChanges(CrudChanges):
         role_id = collections.roles.by_name['tag_applies']
         collections.related.remove({'subject_id': key, 'assoc_id': role_id})
 
+    def handle_delete(self, identifier, in_changeset):
+        test = lambda item: item.subject_id == identifier
+        in_changeset.related.delete_matching(test)
 
 
 class GroupChanges(CrudChanges):
@@ -418,6 +425,9 @@ class GroupChanges(CrudChanges):
         rev_id = collections.roles.by_name['contains_group']
         collections.related.remove({'subject_id': key, 'assoc_id': role_id})
         collections.related.remove({'object_id': key, 'assoc_id': rev_id})
+
+    def handle_delete(self, identifier, in_changeset):
+        in_changeset.related.delete_object(identifier)
 
 class QueryChanges(CrudChanges):
     kind = 'queries'

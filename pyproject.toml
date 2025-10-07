@@ -9,6 +9,9 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "cryptography>=46.0.1",
+    "motor>=3.7.1",
+    "pymongo>=4.15.2",
+    "pyyaml>=6.0.3",
 ]
 
 [project.scripts]
