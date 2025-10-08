@@ -9,6 +9,7 @@ from sjasoft.uopmeta.schemas.meta import MetaContext, Grouped, Tagged, \
     Related, kind_map, BaseModel, MetaQuery, ClassComponent, AttributeComponent, AndQuery, OrQuery
 
 from sjasoft.uopmeta.schemas import meta
+from sjasoft.uop.database import Database
 from sjasoft.uop.query import Q
 from sjasoft.uopmeta import oid
 from sjasoft.uop.exceptions import NoSuchObject
@@ -58,10 +59,8 @@ class Interface(object):
     handling requests for multiple tenants.
     Similarly a cache should be shared across requests to a process.
     """
-    _db = None
-    _cache = None
 
-    def __init__(self, db, cache=None, tenant_id=None):
+    def __init__(self, db:Database, cache=None, tenant_id=None):
         self._db = db
         self._tenant = tenant_id
         self._cache = cache

@@ -14,7 +14,7 @@ class DatabaseCollections(object):
     def __getattr__(self, name):
         return self._collections[name]
 
-    def __init__(self, db, tenancy_type='embedded', tenant_id=None):
+    def __init__(self, db, tenancy_type='embedded', tenant_id=''):
         if not tenant_id:
             tenancy_type = 'no_tenants'
         self._tenant_id = tenant_id

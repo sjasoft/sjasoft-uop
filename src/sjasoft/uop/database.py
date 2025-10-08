@@ -73,22 +73,13 @@ class Database(object):
     def existing_db_names(cls):
         return []
 
-    def __init__(self, index=None, collections=None,
-                 tenancy='no_tenants', **dbcredentials):
+    def __init__(self, tenant_id=None, **dbcredentials):
         self.credentials = dbcredentials
-        self._db_info = None
-        self.types = meta.base_types
-        self._id = index if index else self._index.next()
-        self.database_by_id[self._id] = self._db = None
-        self._collections = collections
+        self._collections:db_coll.DatabaseCollections = None
         self._long_txn_start = 0
-        self._tenancy = tenancy
-        self._applications = None
-        self._schemas = None
         self._tenants = None
-        self._users = None
-        self._tenant_map = {}
         self._base_collections_collected = False
+        self._tenant_id = tenant_id
         self.open_db()
 
     @property
@@ -111,12 +102,16 @@ class Database(object):
     @property
     def collections(self):
         if not self._collections:
-            self._collections = db_coll.DatabaseCollections(self)
+            self._collections = db_coll.DatabaseCollections(self, tenant_id=self._tenant_id)
         return self._collections
 
     def set_tenant_collections(self, tenant_id):
         collections = self.get_tenant_collections(tenant_id)
         self._collections = collections
+        
+    def merge_tenant_collections(self, tenant_id):
+        collections = self.get_tenant_collections(tenant_id)
+        self._collections._collections.update(collections._collections)
 
     def tenants(self):
         if not self._tenants:
@@ -137,6 +132,14 @@ class Database(object):
         if not self._schemas:
             self._schemas = self.collections._collections.get('schemas')
         return self._schemas
+    
+    def add_schema(self, a_schema: meta.Schema):
+        """
+        Adds a schema to the database.
+        :param a_schema: a Schema
+        :return: None
+        """
+        self.schemas().insert(**a_schema.dict())
 
     def get_admined_application(self, tenant_id):
         """
@@ -158,6 +161,29 @@ class Database(object):
     def get_tenant(self, tenant_id):
         tenants = self.tenants()
         return tenants.get(tenant_id)
+    
+    def get_user(self, user_id):
+        users = self.users()
+        return users.get(user_id)
+    
+    def add_user(self, user: meta.User, tenant_id: str):    
+        users = self.users()
+        user =users.insert(**user.dict())
+        return user
+    
+    def add_tenant(self, tenant: meta.Tenant):
+        tenants = self.tenants()
+        tenant = tenants.insert(**tenant.dict())
+        return tenant
+    
+    def add_tenant_user(self, tenant_id: str, user_id: str):
+        role_id = self.roles.name_to_id['tenant_user']
+        self.relate(tenant_id, role_id, user_id)
+    
+    def remove_tenant_user(self, tenant_id: str, user_id: str):
+        role_id = self.roles.name_to_id['tenant_user']
+        self.unrelate(tenant_id, role_id, user_id)
+    
 
     def drop_tenant(self, tenant_id):
         """
@@ -245,7 +271,7 @@ class Database(object):
         self.ensure_basic_collections()
         collections = self.collections
         if tenant_id:
-            tenant = self.get_tenant(tenant_id)
+            tenant: meta.Tenant = self.get_tenant(tenant_id)
             if tenant:
                 collections = self._tenant_map.get(tenant_id)
                 if not collections:
@@ -255,8 +281,6 @@ class Database(object):
                     self._tenant_map[tenant_id] = collections
         return collections
 
-    def all_types(self):
-        return [t.persistent_fields() for t in self.types().values()]
 
     def ensure_extensions(self):
         """
@@ -280,19 +304,26 @@ class Database(object):
 
     def get_collection(self, collection_name):
         return self.collections.get(collection_name)
+    
+    def ensure_core_schema(self):
+        core_schema: meta.Schema = meta.core_schema()
+        if not self.schemas().find_one({'name': core_schema.name}):
+            self.add_schema(core_schema)
+        self.ensure_schema(meta.core_schema)
+        
+    def ensure_schema(self, a_schema: meta.Schema):
+        if not self.schemas().find_one({'name': a_schema.name}):
+            self.add_schema(a_schema)
+        self.ensure_schema_installed(a_schema)
+
+        
+        
 
     def set_up_database(self):
         self._id = self._index.next()
         self.database_by_id[self._id] = self
         self.ensure_basic_collections()
-        # TODO figure out whether this code was ever useful for anything and cleanup if so
-        # user = User.create(f'owner_{self._id}')
-        # self.users().insert(**user)
-        # info = dict(
-        #     id = self._id,
-        #     owner = user.id
-        # )
-        # self.database_collection().update_one(self._id, {'owner': user.id})
+
 
 
     def open_db(self, setup=None):

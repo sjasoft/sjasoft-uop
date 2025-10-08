@@ -2,6 +2,7 @@ __author__ = 'samantha'
 
 from collections import defaultdict
 from sjasoft.uop import db_interface
+from sjasoft.uop.database import Database
 from sjasoft.uopmeta.schemas.meta import core_schema, Tenant, User
 
 
@@ -9,26 +10,12 @@ class Services(object):
     service_map = {}
 
 
-    def __init__(self, db):
+    def __init__(self, db: Database):
         self._db = db
 
     def ensure_base_schema(self):
         self.ensure_schema(core_schema)
 
-
-    def schemas(self):
-        return self._db.schemas()
-
-    def tenants(self):
-        return self._db.tenants()
-
-    def get_tenant(self, tenant_id):
-        tenants = self.tenants()
-        return tenants.get(tenant_id)
-
-
-    def tenant_user_collection(self):
-        return self._db.collections.get('uop_tenant_users')
 
     def tenant_user_ids(self, tenant_id):
         return self.tenant_user_collection().find({'tenant_id': tenant_id}, only_cols=['user-id'])
@@ -63,10 +50,14 @@ class Services(object):
         dbi = self.tenant_interface()
         dbi.ensure_schema(a_schema)
 
-    def add_schema(self, a_schema):
-        return self.schemas().insert(**a_schema.dict())
 
     def user_collection(self):
+        """
+        Returns the user collection. Users can be within tenants.   
+        They are never database wide. By default database can support tenants and default
+        no tenant multi-user case is multi-tenancy.
+        :return: User collection
+        """
         return self._db.collections.get('uop_users')
 
     def get_user(self, user_id):
