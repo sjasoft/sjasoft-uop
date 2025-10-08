@@ -21,7 +21,7 @@
 """
 
 from sjasoft.uop import db_collection as db_coll
-from sjasoft.uop.collections import uop_collection_names
+from sjasoft.uop.collections import uop_collection_names, per_tenant_kinds
 from sjasoft.uop import changeset
 from sjasoft.uopmeta.schemas import meta
 from sjasoft.utils import decorations
@@ -78,9 +78,23 @@ class Database(object):
         self._collections:db_coll.DatabaseCollections = None
         self._long_txn_start = 0
         self._tenants = None
-        self._base_collections_collected = False
+        self._collections_complete = False
         self._tenant_id = tenant_id
-        self.open_db()
+        self._ensure_internal_collections()
+
+    def _ensure_internal_collections(self):
+        self._collections = db_coll.DatabaseCollections(self, col_map=dict(uop_collection_names))
+
+
+    @contextmanager
+    def changes(self, changeset=None):
+        changes = self._changeset or changeset.ChangeSet()
+        yield changes
+        if not self._changeset:
+            if self._cache:
+                self._cache.apply_changes(changes)
+            self._db.apply_changes(changes, self._db.collections)
+
 
     @property
     def in_long_transaction(self):
@@ -101,8 +115,13 @@ class Database(object):
 
     @property
     def collections(self):
-        if not self._collections:
-            self._collections = db_coll.DatabaseCollections(self, tenant_id=self._tenant_id)
+        if not self._collections_complete:
+            col_map = dict(uop_collection_names)
+            if self._tenant_id: 
+                tenant: meta.Tenant = self.get_tenant(self._tenant_id)
+                if tenant:
+                    self._collctions.update_tenant_collections(tenant.base_collections)
+            self._collections_complete = True
         return self._collections
 
     def set_tenant_collections(self, tenant_id):
@@ -115,7 +134,7 @@ class Database(object):
 
     def tenants(self):
         if not self._tenants:
-            self._tenants = self.collections._collections.get('tenants')
+            self._tenants = self._collections.get('tenants')
         return self._tenants
 
     def users(self):
@@ -140,23 +159,6 @@ class Database(object):
         :return: None
         """
         self.schemas().insert(**a_schema.dict())
-
-    def get_admined_application(self, tenant_id):
-        """
-        Returns application this tenant is admin for. This assumes
-        that a particular tentant can be admin for at most one application.
-        This is in keeping with application being available to one
-        or more tenants or database wide.
-
-        Args:
-            tenant_id (id): ide of tentant
-
-        Returns:
-            application_id: id of application object or None
-        """
-        apps = self.applications()
-        app = apps.find_one({'admin_user': tenant_id})
-        return app['_id'] if app else None
 
     def get_tenant(self, tenant_id):
         tenants = self.tenants()
@@ -194,6 +196,13 @@ class Database(object):
         if collections:
             self.collections.drop_collections(collections)
 
+    def create_tenannt(self, name = ''):
+        tenant = meta.Tenant(name=name)
+        for kind in per_tenant_kinds:
+            tenant.base_collections[kind] = self.random_collection_name()
+        self.add_tenant(tenant)
+        return tenant
+    
     def new_collection_name(self, baseName=None):
         return index.make_id(48)
 
@@ -210,87 +219,15 @@ class Database(object):
         pass
 
     def get_managed_collection(self, name, schema=None):
-        return self.collections.get(name)
+        known = self.collections.get(name)
+        if not known:
+            raw = self.get_raw_collection(name, schema)
+            known = self.wrap_raw_collecton(raw)
+        return known
 
-    def get_standard_collection(self, kind, tenant_modifer=None, name=''):
-        coll_name = uop_collection_names[kind]
+    def wrap_raw_collecton(self, raw):
         pass
 
-    def make_extension_collection(self, cls):
-        coll_name = self.random_collection_name()
-
-
-    def get_tenant_collection(self, name):
-        return self.get_managed_collection(self.new_collection_name())
-
-    def database_collection(self):
-        return self.collections._collections.get('databases')
-
-    def db_info(self):
-        if not self._db_info:
-            db = self.database_collection()
-            self._db_info = db.get(self._id)
-        return self._db_info
-
-    def has_tenants(self):
-        return self.db_info()['tenancy'] != 'no_tenants'
-
-    def ensure_database_info(self):
-        db_info = self.db_info()
-        db = self.database_collection()
-        if not db_info:
-            db_info = meta.Database(tenancy=self._tenancy)
-        return db_info
-
-    def ensure_apps(self):
-        pass
-
-    def ensure_meta(self):
-        pass
-
-    def ensure_tenants(self):
-        pass
-
-    def ensure_setup(self):
-        self.collections.ensure_basic_collections()
-        self.ensure_database_info()
-
-    def ensure_basic_collections(self):
-        if not self._base_collections_collected:
-            self.ensure_setup()
-            self._base_collections_collected = True
-
-
-    def get_tenant_collections(self, tenant_id=None):
-        """
-        Returns a db collections object for the given tenant_id if there
-        is such a teannt
-        :param tenant_id: id of the tenet
-        :return: DBCollections instance or None
-        """
-        self.ensure_basic_collections()
-        collections = self.collections
-        if tenant_id:
-            tenant: meta.Tenant = self.get_tenant(tenant_id)
-            if tenant:
-                collections = self._tenant_map.get(tenant_id)
-                if not collections:
-                    col_map = tenant.get('collections_map')
-                    collections = db_coll.DatabaseCollections(self, tenant_id=tenant_id)
-                    collections.ensure_basic_collections(col_map)
-                    self._tenant_map[tenant_id] = collections
-        return collections
-
-
-    def ensure_extensions(self):
-        """
-        Ensure that the extensions are in place for the database.  Some databases
-        have an issue if there is an attempt to change database structure (e.g.,
-        creating a new table) while a transaction is in progress.  This method
-        should be called before entering a long transaction to avoid this problem.
-        :return:
-        """
-        self.collections.ensure_class_extensions()
 
     def start_long_transaction(self):
         pass
@@ -316,28 +253,19 @@ class Database(object):
             self.add_schema(a_schema)
         self.ensure_schema_installed(a_schema)
 
-        
-        
-
-    def set_up_database(self):
-        self._id = self._index.next()
-        self.database_by_id[self._id] = self
-        self.ensure_basic_collections()
-
-
 
     def open_db(self, setup=None):
-        if self._database_new():
-            self.set_up_database()
+        self._collections = db_coll.DatabaseCollections(self)
+        self._collections.ensure_collections(uop_collection_names)
+        if self._tenant_id:
+            tenant: meta.Tenant = self.get_tenant(self._tenant_id)
+            if tenant:
+                self._collections.ensure_collections(tenant.base_collections, override=True)
+        self._collections.ensure_extensions()
+        self._collections_complete = True
 
     def _db_has_collection(self, name):
         return False
-
-    def _database_new(self):
-        """
-        database is new
-        """
-        return not self._db_has_collection('uop_classes')
 
     def log_changes(self, changeset, tenant_id=None):
         """ Log the changeset.

@@ -20,7 +20,7 @@ crud_kinds = ['objects', 'classes', 'attributes', 'roles', 'tags',
 meta_kinds = crud_kinds[1:]  # TODO reconsider queries which are mixed!
 internal_kinds = ['database', 'tenants', 'schemas', 'users', 'applications', 'application_tenants']
 assoc_kinds = ['related']
-per_tenant_kinds = assoc_kinds + ['changes']
+per_tenant_kinds = assoc_kinds + ['changes'] + meta_kinds
 kinds = crud_kinds + assoc_kinds
 shared_collections = crud_kinds[1:]
 

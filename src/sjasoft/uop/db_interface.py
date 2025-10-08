@@ -74,15 +74,7 @@ class Interface(object):
     def tenant_id(self):
         return self._tenant
 
-    @contextmanager
-    def changes(self):
-        changes = self._changeset or changeset.ChangeSet()
-        yield changes
-        if not self._changeset:
-            if self._cache:
-                self._cache.apply_changes(changes)
-            self._db.apply_changes(changes, self._db.collections)
-
+    
     @property
     def metacontext(self):
         return self._context
