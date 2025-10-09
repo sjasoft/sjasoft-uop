@@ -39,21 +39,12 @@ from contextlib import contextmanager
 
 import re
 
-comment = defaultdict(set)
 logger = logging.getLogger('uop.database')
 
 def as_dict(data):
     if isinstance(data, BaseModel):
         return data.dict()
     return dict(data)
-
-
-def id_dictionary(doclist):
-    return dict([(x['_id'], x) for x in doclist])
-
-
-def objects(doclist):
-    return [x for x in doclist]
 
 
 class Database(object):
@@ -97,7 +88,7 @@ class Database(object):
         self._context:meta.MetaContext = None
         self._changeset:changeset.ChangeSet = None
         self._mandatory_schemas = schemas
-        self._ensure_internal_collections()
+        self.open_db()
 
 
     @property
@@ -128,9 +119,6 @@ class Database(object):
         return has_changes, changes
 
 
-    @property
-    def in_long_transaction(self):
-        return self._long_txn_start > 0
 
     def meta_context(self):
         data = self.collections.metadata()
@@ -146,6 +134,7 @@ class Database(object):
         return self.get_managed_collection(self.random_collection_name(), schema)
 
     # Collections
+
     @property
     def collections(self):
         if not self._collections_complete:
@@ -195,7 +184,7 @@ class Database(object):
     
     # These three methods are used to find/create managed collections wrapping underlying datastore collections
     # All database adaptors must implement gew_raw_collection and wrap_raw_collection
-    def get_raw_collection(self, name):
+    def get_raw_collection(self, name, schema=None):
         """
         A raw collection is whatever the underlying datastore uses, e.g., a table or
         document collection.
@@ -350,6 +339,16 @@ class Database(object):
 
     # Transaction support
     
+    @property
+    def in_long_transaction(self):
+        return self._long_txn_start > 0
+
+    @contextmanager
+    def perhaps_committing(self, commit=False):
+        yield
+        if commit:
+            self.commit()
+
     def start_long_transaction(self):
         pass
 
@@ -357,9 +356,9 @@ class Database(object):
         self._long_txn_start = 0
 
     def begin_transaction(self):
+        if not self._changeset:
+            self._changeset = changeset.ChangeSet()
         in_txn = self.in_long_transaction
-        if not in_txn:
-            self.ensure_extensions()
         self._long_txn_start += 1
         if not in_txn:
             self.start_long_transaction()
@@ -450,13 +449,8 @@ class Database(object):
                                       only_cols=('changes',))
         return changeset.ChangeSet.combine_changes(*changesets)
 
-
-
-
     def remove_collection(self, collection_name):
         pass
-
-
         
     def apply_changes(self, changeset):
         self.begin_transaction()

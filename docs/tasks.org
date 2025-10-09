@@ -18,10 +18,108 @@ This one is simple non-recursive search until subtags are considered.  Which is 
 
 * ACTIVE update async db_collection
 SCHEDULED: <2023-02-01 Wed>
+* Inbox
+** DONE standardize get_managed_collection in mongo driver
+CLOSED: [2025-10-08 Wed 23:26] SCHEDULED: <2025-10-08 Wed>
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2025-10-08 Wed 23:26]
+:END:
+** DONE standardize get_managed_collection in sqlite driver
+CLOSED: [2025-10-08 Wed 23:26] SCHEDULED: <2025-10-08 Wed>
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2025-10-08 Wed 23:26]\
+** DONE remove driver collection modifiers for previous embedded tenant id
+CLOSED: [2025-10-09 Thu 00:42] SCHEDULED: <2025-10-09 Thu>
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2025-10-09 Thu 00:42]
+:END:
+** TODO merge Services into database.py
+SCHEDULED: <2025-10-12 Sun>
+** TODO merge db_interface into database 
+SCHEDULED: <2025-10-13 Mon>
+** DONE add transactions to mongo driver
+CLOSED: [2025-10-09 Thu 00:19] SCHEDULED: <2025-10-10 Fri>
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2025-10-09 Thu 00:19]
+:END:
+*** chat info
+I'll help you understand MongoDB's transaction support. Let me first check what you're working with in your codebase and then provide information about MongoDB transactions.
+
+
+[1 tool called]
+
+Now let me search for more information about MongoDB transaction support to give you a comprehensive answer.
+
+
+[1 tool called]
+
+Based on your code and current MongoDB capabilities, I can see there's some outdated information in your MongoDB adapter. Let me clarify:
+
+**MongoDB DOES have transaction support** - but this is a relatively recent development:
+
+**** MongoDB Transaction Support Timeline
+
+1. **Pre-4.0 (before June 2018)**: MongoDB only supported single-document atomic operations
+2. **Version 4.0+ (June 2018)**: Added multi-document ACID transactions
+3. **Version 4.2+ (August 2019)**: Enhanced with distributed transactions across sharded clusters
+
+## Current Status
+
+Your code in `/home/samantha/work/code_uv/sjasoft-uopdb-mongo/src/sjasoft/upopdb/mongo/adaptor.py` has this comment on lines 206-213:
+
+```python
+def begin_transaction(self):
+    """
+    Mongodb doesn't have transaction support.  But we can fake it by keeping reverse information for the
+    set of changes to be imposed by processing changes.  Note that this mechanism will not handle nested txn
+    currently.  Many systems do nested txn by simply ignoring the nesting and only really committing at the
+    top level anyway.
+    """
+    pass
+```
+
+**This comment is outdated!** MongoDB has had transaction support since version 4.0.
+
+**** How to Use MongoDB Transactions
+
+Here's how you can implement proper transaction support in your MongoDB adapter:
+
+#+BEGIN_SRC python
+def begin_transaction(self):
+    """Start a MongoDB transaction session"""
+    self._session = self._client.start_session()
+    self._session.start_transaction()
+    return self._session
+
+def commit_transaction(self):
+    """Commit the current transaction"""
+    if hasattr(self, '_session') and self._session:
+        self._session.commit_transaction()
+        self._session.end_session()
+        self._session = None
+
+def rollback_transaction(self):
+    """Rollback the current transaction"""
+    if hasattr(self, '_session') and self._session:
+        self._session.abort_transaction()
+        self._session.end_session()
+        self._session = None
+#+END_SRC
+
+**** Requirements for MongoDB Transactions
+
+- MongoDB 4.0+ (for replica sets)
+- MongoDB 4.2+ (for sharded clusters)
+- WiredTiger storage engine
+- Replica set or sharded cluster (not supported on standalone instances)
+
+Your current implementation uses a "fake" transaction approach by tracking changes for rollback, which was necessary before MongoDB 4.0 but is no longer needed if you're using a recent MongoDB version.
+** TODO create async version of new unifided database.py
+SCHEDULED: <2025-11-04 Tue>
+** TODO update async mongo driver to match
+SCHEDULED: <2025-11-09 Sun>
 * Ouery Tasks
 ** TODO ensure fetch from db correct
-** BACKLOG query shared?
-Currently queries are part of shared content when in fact queries likely have both shared (app defined) and tenant specific instances. Is this any more true than for other metadata?  It really depends on the app/product.  Some will have a lot of pre-defined queries for business functionality that they want available to all clients/tenants.  Others will offer as part of product client/tenant ability to write their own queires.  So supporting both is important.
 * Query Tests
 ** DONE test dict conversions
 CLOSED: [2023-06-22 Thu 15:52]

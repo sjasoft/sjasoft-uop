@@ -49,11 +49,6 @@ class Interface(object):
 
 
 
-    @contextmanager
-    def perhaps_committing(self, commit=False):
-        yield
-        if commit:
-            self.commit()
 
     def get_class(self, cls_id):
         return self.get_meta('classes', cls_id)
@@ -67,17 +62,6 @@ class Interface(object):
     def get_meta_named(self, kind, name):
         return self.metacontext.get_meta_named(kind, name)
 
-
-    def update_metadata(self, metadata):
-        """
-        Modifies metadata, adding, modifying and deleting. The
-        most common use is updating application standard metadata
-        adding metadata for a new user.  INTERNAL
-        :param metadata: Basically a changeset of updates.
-        :return: None
-        """
-        self._db.apply_changes(metadata, self.collections)
-        self.reload_metacontext()
 
     def begin_transaction(self):
         """starts a changeset that will not be applied unitl commit"""
