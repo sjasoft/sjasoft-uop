@@ -24,14 +24,28 @@ from sjasoft.uop import db_collection as db_coll
 from sjasoft.uop.collections import uop_collection_names, per_tenant_kinds
 from sjasoft.uop import changeset
 from sjasoft.uopmeta.schemas import meta
+from sjasoft.uopmeta.schemas.meta import MetaContext, BaseModel
 from sjasoft.utils import decorations
-from sjasoft.utils import cw_logging, index
-import time
+from sjasoft.utils import logging, index
 from sjasoft.utils.decorations import abstract
+from sjasoft.uop.query import Q
+from sjasoft.uopmeta import oid
+from sjasoft.uop.exceptions import NoSuchObject
 from collections import defaultdict
+from functools import reduce
+import time
+from collections import defaultdict
+from contextlib import contextmanager
+
+import re
 
 comment = defaultdict(set)
-logger = cw_logging.getLogger('uop.database')
+logger = logging.getLogger('uop.database')
+
+def as_dict(data):
+    if isinstance(data, BaseModel):
+        return data.dict()
+    return dict(data)
 
 
 def id_dictionary(doclist):
@@ -73,27 +87,45 @@ class Database(object):
     def existing_db_names(cls):
         return []
 
-    def __init__(self, tenant_id=None, **dbcredentials):
+    def __init__(self, tenant_id=None, *schemas,**dbcredentials):
         self.credentials = dbcredentials
         self._collections:db_coll.DatabaseCollections = None
         self._long_txn_start = 0
         self._tenants = None
         self._collections_complete = False
         self._tenant_id = tenant_id
+        self._context:meta.MetaContext = None
+        self._changeset:changeset.ChangeSet = None
+        self._mandatory_schemas = schemas
         self._ensure_internal_collections()
 
-    def _ensure_internal_collections(self):
-        self._collections = db_coll.DatabaseCollections(self, col_map=dict(uop_collection_names))
 
+    @property
+    def metacontext(self):
+        return self._context
+    
+    def get_metadata(self):
+        return self.collections.metadata()
+
+    def reload_metacontext(self):
+        coll_meta = self.get_metadata()
+        self._context = MetaContext.from_data(coll_meta)
+        
 
     @contextmanager
     def changes(self, changeset=None):
         changes = self._changeset or changeset.ChangeSet()
         yield changes
         if not self._changeset:
-            if self._cache:
-                self._cache.apply_changes(changes)
             self._db.apply_changes(changes, self._db.collections)
+
+    def ensure_schema(self, a_schema):
+        changes = changeset.meta_context_schema_diff(self.metacontext, a_schema)
+        has_changes = changes.has_changes()
+        if has_changes:
+            self.apply_changes(changes)
+            self.reload_metacontext()
+        return has_changes, changes
 
 
     @property
@@ -113,6 +145,7 @@ class Database(object):
     def make_random_collection(self, schema=None):
         return self.get_managed_collection(self.random_collection_name(), schema)
 
+    # Collections
     @property
     def collections(self):
         if not self._collections_complete:
@@ -124,33 +157,136 @@ class Database(object):
             self._collections_complete = True
         return self._collections
 
-    def set_tenant_collections(self, tenant_id):
-        collections = self.get_tenant_collections(tenant_id)
-        self._collections = collections
-        
-    def merge_tenant_collections(self, tenant_id):
-        collections = self.get_tenant_collections(tenant_id)
-        self._collections._collections.update(collections._collections)
-
+    def classes(self):
+        return self.collections.classes
+    
+    def changes(self):
+        return self.collections.changes
+    
+    def attributes(self):
+        return self.collections.attributes
+    
+    def queries(self):
+        return self.collections.queries
+    
+    def related(self):
+        return self.collections.related
+    
+    def roles(self):
+        return self.collections.roles
+    
+    def tags(self):
+        return self.collections.tags
+    
+    def groups(self):
+        return self.collections.groups
+    
     def tenants(self):
         if not self._tenants:
             self._tenants = self._collections.get('tenants')
         return self._tenants
 
     def users(self):
-        if not self._users:
-            self._users = self.collections._collections.get('users')
-        return self._users
+        return self.collections.users
 
-    def applications(self):
-        if not self._applications:
-            self._applications = self.collections._collections.get('applications')
-        return self._applications
 
     def schemas(self):
-        if not self._schemas:
-            self._schemas = self.collections._collections.get('schemas')
-        return self._schemas
+        return self.collections.schemas
+    
+    # These three methods are used to find/create managed collections wrapping underlying datastore collections
+    # All database adaptors must implement gew_raw_collection and wrap_raw_collection
+    def get_raw_collection(self, name):
+        """
+        A raw collection is whatever the underlying datastore uses, e.g., a table or
+        document collection.
+        :param name: name of the underlying
+        :return: the raw collection or None
+        """
+        pass
+
+    def get_managed_collection(self, name, schema=None):
+        """Gets an existing managed (subclass of DBCollection) collection by name. 
+        If not found, creates it.
+
+        Args:
+            name (_type_): name of the collection which also be name on the underlying datastore
+            schema (_type_, optional): schema of the collection for datastores that need it. 
+            Will either be a some meta object class or a Metaclass instance. Defaults to None.
+
+        Returns:
+            DBCollection: the managed collection
+        """
+        known = self.collections.get(name)
+        if not known:
+            raw = self.get_raw_collection(name, schema)
+            known = self.wrap_raw_collecton(raw)
+        return known
+
+    def wrap_raw_collecton(self, raw):
+        """Wraps a raw collection in a managed collection.
+        This is a subclass of DBCollection
+        """
+        pass
+
+    # Meta Collections and useful functions on them. In memory meta-items managed by metacontext
+    
+    def meta_classes(self):
+        return self.metacontext.classes
+    
+    def meta_attributes(self):
+        return self.metacontext.attributes
+    
+    def meta_roles(self):
+        return self.metacontext.roles
+    
+    def meta_tags(self):
+        return self.metacontext.tags
+    
+    def meta_groups(self):
+        return self.metacontext.groups
+    
+    def meta_queries(self):
+        return self.metacontext.queries
+    
+    def meta_related(self):
+        return self.metacontext.related
+    
+    def name_to_id(self, kind):
+        return self.metacontext.name_to_id(kind)
+    
+    def id_to_name(self, kind):
+        return self.metacontext.id_to_name(kind)
+    
+    def id_map(self, kind):
+        return self.metacontext.id_map(kind)
+    
+    def name_map(self, kind):
+        return self.metacontext.name_map(kind)
+    
+    def ids_to_names(self, kind):
+        return self.metacontext.ids_to_names(kind)
+    
+    def names_to_ids(self, kind):
+        return self.metacontext.names_to_ids(kind)
+
+    def by_name(self, kind):
+        return self.metacontext.by_name(kind)
+    
+    def by_id(self, kind):
+        return self.metacontext.by_id(kind)
+    
+    def by_name_id(self, kind):
+        return self.metacontext.by_name_id(kind)
+    
+    def by_id_name(self, kind):
+        return self.metacontext.by_id_name(kind)
+    
+    def role_id(self, name):
+        return self.metacontext.roles.name_to_id(name)
+    
+
+
+    # Schemas
     
     def add_schema(self, a_schema: meta.Schema):
         """
@@ -159,6 +295,8 @@ class Database(object):
         :return: None
         """
         self.schemas().insert(**a_schema.dict())
+        
+    # Tenants and Users
 
     def get_tenant(self, tenant_id):
         tenants = self.tenants()
@@ -178,14 +316,14 @@ class Database(object):
         tenant = tenants.insert(**tenant.dict())
         return tenant
     
+    
     def add_tenant_user(self, tenant_id: str, user_id: str):
-        role_id = self.roles.name_to_id['tenant_user']
-        self.relate(tenant_id, role_id, user_id)
+        self.relate(tenant_id, self.role_id['has_user'], user_id)
+
     
     def remove_tenant_user(self, tenant_id: str, user_id: str):
-        role_id = self.roles.name_to_id['tenant_user']
-        self.unrelate(tenant_id, role_id, user_id)
-    
+        self.unrelate(tenant_id, self.role_id['has_user'], user_id)
+
 
     def drop_tenant(self, tenant_id):
         """
@@ -202,6 +340,7 @@ class Database(object):
             tenant.base_collections[kind] = self.random_collection_name()
         self.add_tenant(tenant)
         return tenant
+
     
     def new_collection_name(self, baseName=None):
         return index.make_id(48)
@@ -209,32 +348,55 @@ class Database(object):
     def ensure_indices(self, indices):
         pass
 
-    def get_raw_collection(self, name):
-        """
-        A raw collection is whatever the underlying datastore uses, e.g., a table or
-        document collection.
-        :param name: name of the underlying
-        :return: the raw collection or None
-        """
-        pass
-
-    def get_managed_collection(self, name, schema=None):
-        known = self.collections.get(name)
-        if not known:
-            raw = self.get_raw_collection(name, schema)
-            known = self.wrap_raw_collecton(raw)
-        return known
-
-    def wrap_raw_collecton(self, raw):
-        pass
-
-
+    # Transaction support
+    
     def start_long_transaction(self):
         pass
 
     def end_long_transaction(self):
         self._long_txn_start = 0
 
+    def begin_transaction(self):
+        in_txn = self.in_long_transaction
+        if not in_txn:
+            self.ensure_extensions()
+        self._long_txn_start += 1
+        if not in_txn:
+            self.start_long_transaction()
+            
+
+    def abort(self):
+        self.end_transaction()
+
+    def end_transaction(self):
+        if self._changeset:
+            self._changeset = None
+            self.end_long_transaction()
+    
+    def commit(self):
+        if self._changeset:
+            self.apply_changes(self._changeset)
+        self.end_transaction()
+        self.reload_metacontext()
+        
+
+    def really_commit(self):
+        pass
+
+
+    def commit(self):
+        if self.in_outer_transaction():
+            self.really_commit()
+            self.end_long_transaction()
+        self.close_current_transaction()
+
+
+    def in_outer_transaction(self):
+        return self._long_txn_start == 1
+
+    def close_current_transaction(self):
+        if self.in_long_transaction:
+            self._long_txn_start -= 1
 
     def get_existing_collection(self, coll_name):
         return self.collections._collections.get(coll_name)
@@ -263,9 +425,12 @@ class Database(object):
                 self._collections.ensure_collections(tenant.base_collections, override=True)
         self._collections.ensure_extensions()
         self._collections_complete = True
+        self.reload_metacontext()
 
     def _db_has_collection(self, name):
         return False
+    
+    # Changesets
 
     def log_changes(self, changeset, tenant_id=None):
         """ Log the changeset.
@@ -285,51 +450,25 @@ class Database(object):
                                       only_cols=('changes',))
         return changeset.ChangeSet.combine_changes(*changesets)
 
-    def begin_transaction(self):
-        in_txn = self.in_long_transaction
-        if not in_txn:
-            self.ensure_extensions()
-        self._long_txn_start += 1
-        if not in_txn:
-            self.start_long_transaction()
 
-    def in_outer_transaction(self):
-        return self._long_txn_start == 1
-
-    def close_current_transaction(self):
-        if self.in_long_transaction:
-            self._long_txn_start -= 1
 
 
     def remove_collection(self, collection_name):
         pass
 
-    def schema_changes(self, schema):
-        meta = self.collections.metadata()
 
-
-    def apply_changes(self, changeset, collections):
+        
+    def apply_changes(self, changeset):
         self.begin_transaction()
-        changeset.attributes.apply_to_db(collections)
-        changeset.classes.apply_to_db(collections)
-        changeset.roles.apply_to_db(collections)
-        changeset.tags.apply_to_db(collections)
-        changeset.groups.apply_to_db(collections)
-        changeset.objects.apply_to_db(collections)
-        changeset.related.apply_to_db(collections)
-        changeset.queries.apply_to_db(collections)
+        changeset.attributes.apply_to_db(self.collections)
+        changeset.classes.apply_to_db(self.collections)
+        changeset.roles.apply_to_db(self.collections)
+        changeset.tags.apply_to_db(self.collections)
+        changeset.groups.apply_to_db(self.collections)
+        changeset.objects.apply_to_db(self.collections)
+        changeset.related.apply_to_db(self.collections)
+        changeset.queries.apply_to_db(self.collections)
         self.log_changes(changeset)
         self.commit()
-
-    def really_commit(self):
-        pass
-
-    def abort(self):
-        self.end_long_transaction()
-
-    def commit(self):
-        if self.in_outer_transaction():
-            self.really_commit()
-            self.end_long_transaction()
-        self.close_current_transaction()
+        self.reload_metacontext()
 

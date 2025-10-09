@@ -20,32 +20,6 @@ import re
 import asyncio
 from contextlib import contextmanager
 
-def as_dict(data):
-    if isinstance(data, BaseModel):
-        return data.dict()
-    return dict(data)
-
-@contextmanager
-def changes(obj):
-    changes = obj._changeset or changeset.ChangeSet()
-    yield changes
-    if not obj._changeset:
-        if obj._cache:
-            obj._cache.apply_changes(changes)
-        obj._db.apply_changes(changes, obj._db.collections)
-
-
-def get_tenant_interface(db, tenant_id):
-    """
-    Creates a UserInterface and ensures its collections are mapped
-    :param db:  The database instance
-    :param tenant_id: the id of the tenant
-    :return: the UserInterface
-    """
-    dbi = Interface(db, tenant_id=tenant_id)
-    dbi.ensure_collections()
-
-    return dbi
 
 
 class Interface(object):
@@ -70,42 +44,9 @@ class Interface(object):
         self._metadata = None
         self._context = None
 
-    @property
-    def tenant_id(self):
-        return self._tenant
-
-    
-    @property
-    def metacontext(self):
-        return self._context
-    
-    def get_metadata(self):
-        return self.raw_db.collections.metadata()
-
-    def reload_metacontext(self):
-        coll_meta = self.get_metadata()
-        self._context = MetaContext.from_data(coll_meta)
-
-    def ensure_collections(self):
-        if not self._collections:
-            # here we should ensure collections correct for tenant
-            self._collections = self._db.get_tenant_collections(self._tenant)
-            self._collections_ready = True
-            self.reload_metacontext()
 
 
-    def ensure_schema(self, a_schema):
-        changes = changeset.meta_context_schema_diff(self.metacontext, a_schema)
-        has_changes = changes.has_changes()
-        if has_changes:
-            self.apply_changes(changes)
-            self.reload_metacontext()
-        return has_changes, changes
 
-
-    @property
-    def collections(self):
-        return self._collections
 
 
     @contextmanager
@@ -127,11 +68,6 @@ class Interface(object):
         return self.metacontext.get_meta_named(kind, name)
 
 
-
-    @property
-    def raw_db(self):
-        return self._db
-
     def update_metadata(self, metadata):
         """
         Modifies metadata, adding, modifying and deleting. The
@@ -149,33 +85,8 @@ class Interface(object):
             self._changeset = changeset.ChangeSet()
             self._db.begin_transaction()
 
-    def abort(self):
-        self.end_transaction()
 
-    def end_transaction(self):
-        if self._changeset:
-            self._changeset = None
-            self._db.end_long_transaction()
-    
-    def commit(self):
-        if self._changeset:
-            if self._cache:
-                self._cache.apply_changes(self._changeset)
-            self._db.apply_changes(self._changeset, self.collections)
-        self.end_transaction()
-        self.reload_metacontext()
 
-    def apply_changes(self, changes):
-        '''
-        Applies the given changes to the current database possibly limited to a tenant.
-        Optionally transforms ids from some other metadata set to the ones appropriate here.
-        This transform is mainly only used for updating an application which is defined
-        as a set of metadata instances only.  Transforming instance ids is not supported.
-        :param changes:  the changeset of changes to apply
-        :return: None
-        '''
-        self._db.apply_changes(changes, self.collections)
-        self.reload_metacontext()
 
     def changes_until(self, a_time):
         changes = self._db.get_collection('changes')
