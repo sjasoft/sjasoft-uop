@@ -1,0 +1,126 @@
+* Database 
+UOP defines a database class.  The base database class expresses what functionality an underlying actual database should provide.  There is one database subclass per specific type of database supported.
+
+** User tenancy and DBInterface
+
+UOP is designed to have support for per user tenancy.  A DBInterface for a user on a database is effectively only the data belonging to/accessible to that user. As from the point of view of usage UOP Database via Inteface is API identical nothing more will be said in this document about that.  Also Database is designed to be usable directly with no per user specification particularly in situations where the database is by its nature for a single user.  In this manner strict physical separation is supported as well. But outside the scope of this document.  See [[multi-tenant]].
+
+
+
+** Required parts
+*** Connection
+Connect to a specific database instance via some set of parametres specifying URI and credentials.
+
+*** Meta setup
+
+Sets up the metadata basis of the database common to all UOP database
+
+**** Add applications metadata
+
+Ensures the metadata needed by a specific application to be supported by the database is installed. 
+
+**** Update metadata
+
+Typically but not only used whe an Application's metadata definition is modified or an application is added or removed.
+
+*** DBCollection Support
+
+A DBCollection in UOP manages and underlying connection/table/kind of object depending on specific database technology and affords the base level CRUD abilities for that type of information and underlying structure.  So for every specific database there is a supporting Collections interface. 
+
+This needly divides tasks in such a way that across many database types teh Database instance is key small, the Collection instance is a bit larger specifying what is specifically different for that type of database.  And the DBInterface may seldom need to be explicitly subclalled for a particular type of database. 
+
+* DBInterface functionality
+
+*** Metadata access
+
+**** classes
+
+***** classes()
+Returns all class objects known to the system
+
+***** get_class(class_id)
+returns the class
+
+***** instances(class_id, recursive=True) 
+Supports both exact instances and inclusion of instances of subclasses
+
+**** groups
+
+***** groups()
+
+returns all groups known to the system
+
+***** get_group(group_id)
+
+returns the group
+
+***** contained_objects(group_id, recursive=True)
+
+Returns only the abjects contained by the group, optionally recursive across groups contained by this group
+
+***** group(group_id, object_or_group_id)
+Adds the identified object or group to the group.  In the case of adding a group any cycle that would be created is raised as an Exception
+
+***** ungroup(group_id, object_or_group_id)
+
+Remove identified object or group from the group. 
+
+***** contains(group_id, object_or_group_id, recursive=True)
+
+Returns whether a group or object is contained directly or recursively by this group. 
+
+**** roles
+
+***** roles()
+
+Returns all roles(relationship edges in graph terms) known to the system.
+
+***** related_by_role(role_id, reverse=False)
+
+Returns mapping of subject (origin) to object[s] (destination) by the given role.
+If reverse == True then the reverse mapping in returned. 
+
+***** is_related_by(role_id, source_id, object_id)
+
+Whether the two objects are related by the given role
+
+***** related_objects(object_id)
+
+Returns a mapping of role_id -> ids of all objects related to this object.
+
+***** 
+
+
+**** tags
+
+**** attributes
+
+
+**** object functionality
+
+***** neighborhood(object_id):
+
+Finds and returns all objects related to the given object by any of
+ - having the same tag
+ - being in the same group
+ - in any way related 
+ 
+Each of these are return as a mapping from tag/group/role to list of object ids. in an map with keys ('tagged', 'grouped', 'related')
+
+**** Changeset support
+
+***** TODO database diff against applied changeset
+DEADLINE: <2022-09-12 Mon>
+
+Goal is support of ensuring set of changes.  This is part of ensuring a schema.  Under what circumstances should doing so error out?  Should there be a "force" parameter?
+
+Thinking of "minimal_changes (changeset)" function. Can that be put on database or does it require db_interface?
+
+***** apply_changes(changeset)
+
+Applies the changes to the underlying database. Stores the timestamped changeset.
+
+***** changes_since(epoch_time):
+
+Returns the rolled up Changeset of all changes since the given time. 
+

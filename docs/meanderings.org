@@ -1,0 +1,38 @@
+* Thoughts
+** Language idea
+Consider any piece of software of more than very small or primitive kind.  This program can be thought of as a set of relatively coherent chunks.  We may find these chunks in different ways.  For instance, from the perspective of logical user interaction chunks (or user intentions) or the perspective of logical computational chunks of work.  
+
+Both representations are hierachical - "chunks" may contain other "chunks". Of course such chunks can trivially be expressed in sexpr and other notations.   Note any piece of information may be presented to the user in variable ways by medium of presentation.  We can have multiple views on an specific piece and any type of information. So a generic UI display language would talk in terms of data elements and logical UI view comonent identification and modification descriptions (size, css, etc.)  But they are all just coherent (hopefully) to some context presentations of part of the information in the data.  
+
+Note that in clojure the non-data metadata available could simplify this sort of thing a lot. No more special attribute prefixs that are hopefully obeyed or munging the object to add/remove or ignore transient or operation tuning information. 
+
+Another representation is in terms of chunks or writing programs in general and exposing the information from them in various media or producing various functional conversions of input streams to output streams.  Remembering select previous inputs and outputs means they may be used for state and to change subsequent conversions of inputs to outputs.  
+
+Despite the theoretical reasons for avoiding state we see that most continuous systems (computational, biological, physical are by definition a state that changes over time due to that which acts upon it or it interacts with.   That said it is clean functional view to have a black box that always does the same thing in response to the same inputs.  But these stateful systems are composed of many such black box stateless mechanisms.  But the ensemble of such black boxes and their arrangement changes over time and in relationship to one another. 
+
+I think we are better so far at capturing chunking in programs, not so good at chunking language and problem, and not very good at chunking user interface interactions and intentions.   If we were better at the last then could conceive of a UI language that would be interpreted in the context of various display devices including desktop, tablet, phone, text.
+
+** UOP Language
+The principle commands are find and remember.  There is also a category at the meta level.  This is the level of maintaining and creating types, roles, attributes, groups and tags.  Many users and use cases will never touch this level.  This level can be expressed in text but is not so amenable to simple one line commands except to start the process. 
+*** remember (<string>)
+Remembers whatever the string describes.  For an url it is a callable on that url.  Information is fetched out the url.  
+
+For all things remembered the user is present with a some matter of display of what the system knows about that particular thing.  This display does not show associated things in its standard state but can be expanded to explore reachable context around the object along different dimensions.
+
+*** find (<string>)
+
+**** Sting format <2015-10-09 Fri>
+
+***** For remember
+An input string may partically specify a type of object or be a effective locator or indicaton (id) of that which is to be found or remembered.  Remember is for remembering a single object or group of objects and some related information such as tags relations to other objects and so on.
+
+****** URI
+An URL or a filepath or some random Universal  Resource Identifier.
+In this form the knowledge item is the page, file, video, or knowledge item at large referred to by the address-like string or identifier.
+****** Type(<common_representation>)
+This is a type of thing and some idenitifer of a particular instance or group of instances.  E.g., Person(John Smith).
+****** Description
+This is sort of like the previous input string but more explicit such as Person(:first_name first :last_name last).
+But a description can also include various kinds of associated information such as tags, relationships to other objects and groups the object[s] is/are in.
+w
+

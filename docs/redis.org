@@ -1,0 +1,14 @@
+So what would happen if we used Redis for cache or even in memory database?
+
+* simple key value
+** 'UOP' or user-id main key
+** ids are universal thus the main key can be an id
+** collection types (of ids normally) can largely be sets
+*** beauty is that Redis sets can be intersected, unioned, etc in Redis.
+** classes - set of class ids
+** groups - set of group ids
+** etc..
+** what of user sharding
+*** courd have userid as prefix
+**** a bit hard to get all of users stuff out of cache/memory
+Can keep set of in cache/memory user specific ids

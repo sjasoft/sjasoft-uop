@@ -1,0 +1,83 @@
+* Nodes and basic edges/relationships
+** User node
+Or possibly separate graph db instance.  This side of neo4j multi-tenant solution using a user node that user specific stuff hangs off of seems the best for multi-user situations.  
+** Relationship from user note for each metatype
+*** Classes
+**** Relations isa oro instance-of to Class Nodes
+*** Class Node
+**** Relationship subclass-of, <superclass-of>
+**** Relationship instances to Object Nodes
+To Object nodes that may bear key-value properties
+**** Relationship has-attribute to Attribute
+But how to express ordering if desired?  Perhaps attribute id or name list or ordering decided by presenting/using enviornment and not in database.  This is likely best.
+*** Attributes
+Metadata about a property. Connected to classes and possibly Instances for ad hoc props or implicitly for class defined properties.
+*** Groups
+**** relationship instances to group nodes
+*** Group node
+***& Relationship contains to objects and groups
+** Tags node
+*** relationship instances to Gat noteds
+** Tag Node
+*** name/id of tag
+*** Relationship has-tag from-to object nodes
+** Roles Node
+*** relationship instances to Role nodes
+** Role Node
+*** name/id of role
+*** relativoship inverse? to inverse role?
+*** relationship subject to an object
+*** relationship object to an object
+
+** Object Node
+*** has properties
+*** relationship has-tag to Tag node
+*** relationhisp in-group to Grop node
+*** relationship related-to Object Node
+related-to may specify a role?
+*** relationship instance-of to Class Node
+*** what relationship for ad-hoc properties?
+* common queries
+** get-object
+Direct node index
+** get-object-tags
+Follow has-tag from object
+** tag-neighborhood, etc
+get-object-tags followed to tags relationship. same for groups-neighborhood, role-neighborhood.
+** class-instances
+back follow instance-of-class for specified class and its subclasses
+** any tags
+all objects reachable from any of the tags
+** all tags
+objects reachable from all of the tags
+** none of tags
+get objects reachable from any and exclude
+* collection model
+** model as appropriate path following?
+** find
+unclear 
+[[https://stackoverflow.com/questions/29382025/get-node-by-property-value-neo4j]]
+[[https://neo4j.com/docs/cypher-manual/current/clauses/where/#boolean-operations]]
+*** property graph may be handy
+** exists
+depends on find
+** column limiting
+property limits of returned
+** no related, tagged, grouped explicit collections
+Worth it to make pseudo-collections?
+* Alt model
+** user - metdata -> meta
+** meta - has tag -> Tag
+** meta - has class -> Class
+** meta - has attribute -> attribute
+** meta - has group -> group
+** meta - has role => role
+** class - has attribute -> attribute
+** class - superclass -> class
+** group - contains -> object
+** group - contains -> group
+** tag - tags -> object
+** object - role - object
+** app -> metadata -> meta
+** app -> used_by -> user
+

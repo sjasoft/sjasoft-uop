@@ -1,0 +1,50 @@
+* Problem - Obscure Initialization Flows
+** collection setup
+*** db.ensure_basic_collections
+**** callers
+- db.set_up_database
+- db.get_tenant_collections
+- database module self execution
+*** collections.ensure_basic_collections
+*** dbi.ensure_collections
+**** callers
+- db_interface.get_tenant_interface (general database interface setup)
+**** calls
+- db.get_tenant_collections
+- dbi.reload_metacontext
+*** DatabaseCollections(..)
+***** callers
+- db.collections <-- property
+- db.get_tenant_collections
+*** db.collections
+***** important callers
+- db.ensure_setup
+
+** Database setup
+Tasks
+- initialize main database adaptor
+- base setup if new database
+- eventually ensure basic collections are set up (actually left to dbi [database interface] to kick off. 
+*** db.set_up_database
+*** db.get_tenant_collections
+**** callers
+- dbi.ensure_collections()
+- db.drop_tenant
+**** calls (if there is a tenant)
+- DatabaseCollections()
+- collections.ensure_basic_collections(..)
+*** db.ensure_setup
+***** callers
+- db.ensure_basic_collections
+*** db_interface.get_tenant_interface
+**** callers
+- services.tenant_interface
+- uop.direct.DirectConnection.login_tenant
+*** services.tenant_interface
+many callers within services.
+* Conclusions
+** Collection setup
+*** Database Interface setup is key driver
+The uop.database_interface.get_tenant_interface forces collection initialization. It takes the database as a parameter along with a tenant_id. Its *ensure_collections* does much of the work.
+** The extension dance
+Another area that is too tangled is setting up extensions.  An extension should be set up on class creation or as soon as class metadata is read from the database.  Too much emphasis may have been put into doing it lazily.

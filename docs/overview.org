@@ -1,0 +1,28 @@
+* Introduction
+
+** Uniform Object Persistence (UOP)
+
+Persisting objects and networks of objects requires support for the distinct properties of OO languages and systems.  
+
+*** Inheritance
+
+Just as an OO language supports polymorphism across classes related to a common superclass UOP supports polymorphism across queries on class/subclass hierarchies.
+
+*** Object Networks and Navigation
+
+OO systems contain an arbitrary graph of objects referencing other objects.  Many object persistence mappings limit all but many-to-many relationships between objects to being modeled as a fixed set of class instances referenced from a given class and its subclasses.  But an OO system is more complex in its graph than this.  Individual instance may be linked to and from other individual instances that are not necessarily restricted to a particular class/type.  Nor are the number of such relationships so limited in real world systems.  
+
+While some OO languages may restrict types that are linked to to a named attribute of the class of a linking object it is quite common for class models to evolve over time.  It is also common to introduce mechanism such as an attribute containing a dictionary to allow named mapping to additional objects and collections of objects.
+
+The evolving definition of classes over time brings us to the schema evolution problem. If references between classes are tied to fixed slots on class instances then the database schema, depending on the type of underlying database, also needs to change.  This can cause many problems.
+
+*** TODO delineate thes problems more throughly and cleanly
+
+A problem that arises both in memory in systems and in databases is the problem of finding all references to a given object, particularly in the case deletion of a referenced object (dangling pointer problem). 
+
+** Tenant Support
+Any many applications there is a need to support at least logically separated use by different tenants.  Tenants can be supported by separate database per tenant or by shared database and programmatic separation of data.  In UOP the latter can be supported by separate instance, grouped, tagged and related tables per tenant.
+
+*** Tentant specific metadata?
+
+This structure handles the case of shared metadata as to classes, tags, roles, groups with separate use of these.  It does not of itself support tenant specific metadata.  An addition that would support this is to have working metadata for a UOP database interface which is by its nature tenant specific (or no tenant possibly) be a union of non-tenant and tenant differentiated metadata.  But in first release this capability is not supported.  

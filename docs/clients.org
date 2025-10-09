@@ -1,0 +1,90 @@
+* UOP Client 
+** Desired Features
+*** Possible local memory caching
+
+Depending on platform.  There is also a tradeoff between local memory and perhaps an in memory database elsewhere. 
+
+**** Satisfied pretty much in uoplient.State
+*** Highly Transparent
+
+As much as possible the client should not need to explicitly get or save an object except perhaps for when it is first persisted.  As much as possible objects will be lazy loaded when needed.
+
+Objects will also be transparently persisted if they become associated with an existing object.   In other words all objects reachable from persistent objects, including by relationship, are persistent.
+
+
+*** Automatically change tracking object attributesa
+
+Data changes sholud be tracked in some transactional manner.
+
+*** Well integrated queries
+
+
+*** Well integrated object associations
+
+There are two schools of thought on this one.  Which approach is best depends on the desired transparency characteristics and on what is available for the language platform at runtime.   A language with very good runtime reflection such as smalltalk and a easily storable and runnable function implementation can be made nearly completely language transparent. 
+
+**** Superclass approach
+
+Here we have a superclass or mixin that provides appropriate methods and possible parts of implementation integrating UOP functionality largely at the same depth as normal object methods on the platform.
+
+The Superclass approach has a transparency flaw in that we can't just tell any old object we like to become persistent.    
+
+**** Functional approach
+
+Here we have language normal functions and possibly classes that do UOP processing upon sets of user applicaton space objects and actions.  This approach cannot generally be as transparent unless we have sufficiently deep and broad hooks to parts of the environment of the client.
+
+*** Simple txn support
+But no pessimistic concurrency. 
+*** associated object transparent collections
+When UOP supports collection attributes then it would be good to have as close to the language norm as possible
+equivalent transactions that handle change tracking and pickle/unpickle detais. 
+*** Metadata language integrated objects
+
+It would be nice to have language classes and metadata information magically transform to/from UOP metadata forms.
+
+
+** Python client 
+*** Reflection and Transparency
+
+Python runtime has enough information to discover the property characteristics of objects dynamically.   So in principle one could say "become_persistent()" to any instance of any class and have a reasonable persistence implementation created dynamically.  In practice this may not be what most python coders want. 
+
+For first target and more in keeping with other python persistence clients we will create a superclass based client.  
+
+*** Transaction support
+
+***  Object methods
+
+**** tags() 
+
+Returns the set of tags on the object.  This is a true set so set operations work on it.
+
+**** related(role=None):
+
+If role is specified then the set of objectIds related to this object by that role is returned.  And adds or removes from the set are automatically recorded in the active changeset. 
+If role is not specified then a mapping of roles to objects sets (roleset) is returned.
+
+** CL client
+
+** Racket client
+** Java client
+** javascript client
+** clojure client
+** C# client
+** c++ client
+
+Unless a lot has changed there is not much reflective capability at runtime.  But clang based tools can do a lot.  I wonder if it is possible to decorate the clang intermediated code (?) somehow?
+
+** Python client
+*** Metadata
+*** Conversion of Metadata
+*** Changesets
+
+*** transaction basis
+
+What is a transaction?  A transaction per thread is converient. Perhaps even in co-routine "thread" situations if each co-routine is a logical shareable unit of work.
+
+So a transaction is something with its own changeset to be persisted either explicitly or implicitly at the end of the transaction containing threadlike entity. 
+
+*** open socket for changes
+
+Websocket or equivalent.  Idea is that server callback fires on changes relevant to client the callback is for.  A subscription ala rxjs. 

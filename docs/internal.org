@@ -1,0 +1,457 @@
+* UOP
+
+** Overview
+
+UOP is an acronym for Uniform Object Persistence.  It is a data store and programming language independent way to persist objects and graphs of objects.  
+
+In addition UOP incorporates object tagging, object groups, and object relationships.  
+
+
+*** What UOP supports
+
+There has been much work and thought done by many researchers and companies into what we mean by "Object Persistence".  The short list includes:
+
+- True object identity - independent of object data (e.g., primary key data attributes in a RDBMS)
+
+- inheritance support - queries and other actions based on the class of items must include subclasses of that class. This support must not be too burdensome on common actions such as insertion, deletion, retrieval and update
+
+- sup*port for collection data types - at least arrays, sets and dictionaries over non-collection types
+
+- low impedance mismatch - OO applications are written in terms of OO concepts not a mix of OO and underlying data store concerns
+
+- object based query language - queries that make sense in terms of OO concepts such as class, rich attributes, inclusion and exclusion
+
+To this list UOP adds:
+
+ - dynamic relationships - new relationships between objects and classes of objects may be defined at any time with no schema changes
+ - tag support - objects may be tagged with an arbitrary number of tags that can be used in queries and other operations
+ - tuned caching - caches are aware of all types of objects and associated data stored and kept up-to-date
+ - multiple store support - support for multiple data stores in same application and relationships across stores [:future]
+ - polyglot persistence support - support for heterogeneous data sources via store type specific adaptors including NoSQL data stores
+ - expanded query language - query across properties, classes, tags, relationships in any combination
+ - cloud backing - all changes to persistent data are recorded in the cloud and automatically synchronized with client/satellite applications 
+ - changesets - transactions sets of changes are recorded and can be replayed on any primary or secondary cache database
+
+** Detail
+
+*** Generalizing  Object Persistence
+
+Object persistence has been used in a variety of different ways ranging from an object-like veneer over relational or other types of persisted  data to fully supporting all aspects of OO expectations in a persistent manner including support fol storing methods or the equivalent in the database.  Most offerings today stick to supporting object data with some support for inheritance and polymorphic queries.   Many offerings do not enforce a consistent persistent object identity/pointer.   
+
+Most offerings support references between objects only inline to the object data.  That is a persistent id reference to another object is embedded within the data of the referring object.  One to many references and many to many are supported by collections of such references.  This is confining when the persistence system does not support uniform persistent object identity as the identy form can vary by type of object referred to.  If the system is schema based this means that having an object refer to a different kind of object can require a schema change.    
+
+The other confining part of such representation of relationship is that the number of such relationships is known at data definition time and a chaneg of definition is required to related new objects in the future.  The UOP approach gives all objects uniform persistent identifiers (uuid) and relationships between objects are kept separate from the objects involved in a related objects map.   This makes possible and much more tractable
+
+- finding all objects related to a given object
+- avoiding dangling pointers on object deletion
+- adding and removing relationships between objects and sets of objects dynamically
+- set-arithmetic when combined with uuids for multiple relations criteria filtering
+
+**** Tags
+
+A very useful ad hoc way to organize any information is with a set of tags.  UOP supports ad hoc tagging of all objects.  Tags can be used for many different purpose.  A common approach is to have a tag represent a concept or perhaps a state of the tagged object[s]. Often it is desirable to gave some conceptual hierarchy such as 'space', 'space.vehicle', 'space.stellar', 'space.vehicle.nuclear'. It is desirable to have query tag support capability on a query for tag 'space' to optionaly include the more specialized space tags.
+
+**** Groups
+
+Groups are a common organizational principle.  Most users are familiar with file system types of grouping where an item has at most one direct containing parent.  UOP supports items belonging to multiple immediate groups when themselves can belong to multiple other groups.
+
+**** Relationships
+
+Binary named relationships can be created between objects.  One to one, one to many and many to many relationships are supported.  
+
+**** Classes
+
+
+**** Collections  [:future] 
+Support for collections, at least for Vector, Set, Map on the basic types (object reference, scalars, datetime, blob (value only) is often limited in an object persistence solution.  UOP supports such collections with out restriction except that collection values are non-hierarchical.
+
+**** Identity
+
+In memory objects and other data structures are commonly referenced by a memory address.  Such a memory address has nothing to do with the type of object or data structure pointed to.  It is simply a reference.  This makes it straightforward to use and store such references in various algorithms.    
+
+In many databases there is no such data independent persistent object identifier or reference.  Instead references are object type dependent in some technologies such as RDBS.  Some object persistent layers expose this non-orthogonal user database referencing.  This is generally a quite bad and limiting idea.  
+UOP uses a consistent, data independent persistent identifier known as a uuid.   The uuid is so structured as to contain information about the type/class of what is pointed to and namespace associated with the object.   This enables faster lookups and some types of filters without need to fetch the actual object.
+
+**** Datastore Independence
+
+UOP abstracts the back-end database layer to provide common abilities needed by UOP internals.  Basically the underlying datastore used as the source of data that is cached and shared as needed by applications.  At UOP tranaction boundaries any changes made by the transaction are written back to the underlying store.   The store abstraction includes a model for the metadata about the datastore contents, API for query support and retrieval of objects, related objects, tagged objects and query support.  Any backend datastore can be used that adequately supports this DataStore API.    In practice additional properties such as database scaling and distribution may be desired and drive choice of underlying data store technology.  
+
+**** Cache Layered Persistence
+
+UOP caches as much as possible.  Persistence needs today range all the way from mobile single app support to desktop multiple app support to networked machine support to cloud.   
+UOP enables full object persistence across all these domains.  It enables connecting a mobile app directly to the cloud for backup with the mobile app acting as a cache for the cloud data effectively.  It supports multi-threaded process apps with local in memory caching or shared memory caching as well as disk (backend datastore) on the machine.  The local disk (if any) is a logical cache of the cloud backed data.   Changes write through as many layers of "cache" as are connected.  Requests for objects not present are forwarded to the next layer until the object is found and retrieved or there are no more layers to check.
+
+The movement between machine and cloud is one of ChangeSets (see below) not individual objects and rolesets.   Changes from the cloud are received quasi-automatically.  Local sets of changes are pushed to the cloud if cloud services are connected.  if a middleware solution is deployed then changes from each application update the middleware cache which updates the actual underlying data store and sends the changeset to the cloud. 
+
+**** Inheritance
+
+Types come in hierarchies.  Child types specialize their parents or have the properties and capabilities of their parents in the case of mix ins (interfaces in Java).  We would like to perform operations, usually selection, over all the instances of a class and its subclasses.    
+
+*** Rich Data Types
+
+Relational data usually does not include support for richer data types such as collections.  But such data types are common in objects and the persistence method should support them.  Many of the NoSQL databases have support for at least some kinds of common collections built in.  In any case UOP must support all the major collection types.  
+
+It is also possible to use polyglot persistence storing more advance datatypes in a parallel type of storage that efficiently supports it. 
+
+*** Collections
+
+Persistent objects often contain attributes of type Collection.  The common collections are lists, sets and dictionaries.  Occasionally a more sophisticated general graph type is encountered but these are less commonly supported. 
+Support for collections, at least for Vector, Set, Map on the basic types (object reference, scalars, datetime, blob (value only) is often limited in an object persistence solution.  UOP supports such collections with out restriction except that collection values are non-hierarchical.
+
+*** Blobs
+
+A Blob is simply an arbitrarily long array of bytes.  It is also the most common data type that is handled in a polyglot matter - usually by storing at least large blobs in a file outside the normal relational store structure along with a reference to be used to get to that external content.  Some relational systems store blobs inline internally.    Typical operations on a blob are file like in any case.
+ 
+*** ChangeSet
+
+A ChangeSet records all changes to metadata and to objects, relationships and tags in a logical transactions.  ChangeSets can be combined into a unified ChangeSet.  This is very useful for updating a remote client with the latest changes from a server or more canonical source of truth.  Changes from remotes can also be bundled to update servers or the cloud.  Thus logical unified changes flow from relative servers to clients and from clients to servers keeping data across clients and servers in sync. 
+Mobile applications can be kept in sync with servers.
+
+*** Query
+
+** Metadata
+
+*** Metadata CRUD
+
+
+Users can create new metadata.  They can create new clases (and thus attributes), groups, tags, relationships (roles).  They can also update and delete these.  As metadata describes user data updates and deletes effect user data.  
+Some metadata and/or some parts of metadata may not be user changeable.  For instance metadata defined by an Application is generally not changeable by the normal user of the Application.  The unique id (_id field) is never user changeable.  It is not part user data in any circumstances.  
+**** Classes
+***** Creation
+Creates underlying datastore collection/table or other representation. 
+***** Modification
+For added/removed attributes see [[Attributes]].
+Renaming a class or changing its description has no real effect.
+Changing the superclass could add/remove attributes but otherwise has no effect.
+***** Deletion
+Deleting a class deletes all instances of that class.  It is an open question what happens to subclasses of the class and their instances. It is up to the application allowing specification of a class deletion and is a parameter in the API whether to also delete subclasses.  By default they are deleted.  If they are not deleted then the superclass of all immediate superclasses has changed to the superclass of the now deleted class and this may causes cascades of changes (of what attributes a class has) down the inheritance tree.   
+
+When a class is deleted all its instances and all associations to those instances will be deleted as well. 
+**** Attributes 
+***** creation
+Attribute creation happens as part of class definition and as a result of class or object modification in UOP.  (Note that adding ad hoc additional attributes to objects is not currently supported)
+Added attributes to clases extend the class definition and thus the underlying datastore representation on stores that include schema.  
+***** modification
+Renames are generally not difficult as they can be done lazily or by rather simple operations agaist the underlying database.  
+Changes of type are more problematic as old data needs to be transformed or changed to some default or unspecified value except in cases of strict or predefined compatibility.
+***** deletion
+Deletion logically cause dropping the column/field from all data corresponind to classes that have this attribute.  This is easiest to do lazily on retrieval.  It might also effect any saved queries that include conditions on the removed property.  
+** User Data
+User data consist of instances of classe (property field collections) and the three types of associations: tagged, grouped, related.
+** Changesets
+A changeset is a set of modifications applied to the user data at a point in time.  Changesets are persisted and timestamped.  So the form an audit trail of exactly what changes were made when.  The enable rollups of changes since a particular point in time and (rather slowly in the worst case) allow reversion to a previous state of the data.
+*** Handling of updates
+** Application
+UOP supports the notion of an Application as a set of predefined metaobjects describing object data and available app specific classes, tags, groups and relationships.  
+
+When an app is installed it exiits in a database with the definition of its metaobjects.  When a user is authorized for an application a copy of these metaobjects is added to the user metaobjects
+ 
+An Application should specify one or more schemas.  When a user or tenant 
+has access to the application this schema is added to its metadata.  
+
+*** Hmmm..
+
+Really an Application should include business logic on its classes and other artifacts.  That is not so easy to do in Python nor is it easy to persist such things.
+
+Thus the entire concept may be sort of strained as we could do the rest of it using Schemas.
+
+*** Application update or insertion		   :application:multi_tenant:
+**** Per user considerations
+If we have a model that each user has a set of metaobjects thata are strictly independent of one another then on insertion of an external or in this case cross-user set of changes requires tending toward keeping indices within the receiing users set.  This means
+ - inserts must check against existing equivalent objects
+
+   + in the event of existing only do at most a mod and against the current id rather than app id
+   + otherwise change the id to a newly generated id
+ - Modify must find and use existing user space id. Class modify must use user ids for attrs
+ - ignore external incoming deletes as there is no easy way to make them safe.
+**** User object receives mapping of app ids to user space ids
+This makes any future updates to the application easy to track.  
+
+*** Application deauthorization					:application:
+**** User keeps all objects and metaobjects they have created
+**** Deauthorization is at a biz level of which users are on the app authorization list.
+
+**** Alternate is shared objects		   :application:multi_tenant:
+This brings up the entire ACS subject.  Plan is to tackle this later.  Among other things it changes the early per user simple sharding story. 
+
+
+** Collection API
+
+Created by Samantha Atkins, last modified on Oct 03, 2015 Go to start of metadata
+The Collection API defines the per "table" or other data collection behavior and functionality required by UOP of any supported datastore.  Adapters that satisfy this API for a particular type of database allow that type of datastore to be used under UOP.  
+find(criteria, only_cols=[], order_by=None)
+Returns the items (rows, entities) in the collection that satisfy the criteria.  The entire row contents will be returned if the query is not limited to only some "columns" of the row.  The return is a sequence (cursor) of row or limited row information.  If only_cols contains only one column/fieldname then only a list of values for that field are returned.  When criteria is empty all rows are returned.
+ 
+Combination Criteria 
+And and Or combinations consist of an '$and' or '$or' key with a value consisting of a list of other conditions that may included nested $and and $or. 
+$or - logical or
+followed by an array of clauses. 
+$and - logical and
+followed by an array of clauses []
+Field criteria
+A field criteria consists of the fieldname as key and a value which is a mapping of a relation criteria to a value.  For example {'field1': {'$gt': 5}} means those rows for which field1 has a value > 5.  
+'$gt' - greater than
+$lt' - less than
+'$ge' - greater than or equal
+'$le' - less than or equal
+'$eq' - equal
+'$ne' - not equal
+'$in' - value in list that as value of the expression
+TBD extend for collections and strings like or regex
+** 
+Tenant Support
+IT is common to want multiple logically separate tenants in a database/application.   The idea is to provide some isolation for different tenants.   But what is and isn't a "tenant".  A tenant is when a database or app needs to operate as if users or user groups have their own copy with no ability to access the data of other tenants and low impact from the existence of other tenants.    A multi-tenant database is a means to support multiple tenants on possibly the same actual database.  The other way to do multi-tenant separation in an app is to have a database per tenant.
+
+Some applications need to give every user a tenant like experience.  Multiple tentants on same database is especially important in such an app.
+
+In UOP multi-tenant on same db also means separation of parts of the metadata space.  But some parts, as they define classes and such, are common and really not changeable by a particular tenant, e.g., the PersistentObject top superclass.   Prefined tags, groups and roles are possibly common for the app or apps the database is used for.  
+
+Separate tenants also get separate instances, tagged, grouped, and related collections.
+
+** Apps & Schemas
+The point is fairly made that a persistence system transcends apps that may use that system and management of things like who is authorized to use an app and how is part of app business logic and not characteristic of persistent storage.  Some of the data in the persistent storage will of course support such app authorization and usage details.     One of the things an app does need to say something about is what persistent schema is require to support the persistence needs of the app.
+
+A Schema defines a set of metadata.  A Schema is logically needed for an app to function re persistence support.  A schema may use parts of and/or derive from other schemas.      For a persistent store there is an overall Schema the store supports. 
+
+An App also needs authorization information for one or more Users that are empowered to change the persistence characteristics of the App - that is to maintain and modify the overall App Schema. 
+
+It is likely best to keep the App information of who can use and update the app separate from the rest of the App persistent data.  Required Schema is part of App data but the instantiated Schema need not live in the separate App database.   But this brings up the interesting point of
+whethre User data is kept separate and perhaps with the App but not in the App live application data.    This may suggest a microservice division
+of labor.    For many types of apps the running app does need some access to user data or at least user ids.  It may be good to separate what is needed about users for administration of the business relationship separate from what is needed about the user in the running app.  Much of the running app user/player/etc. information is actually irrelevant outside the nurring app anyway. 
+
+
+
+*** Per user tenancy
+Some applications want logical data separation per user.  PKM is an example of this.
+** User
+Many applications, whether they have larger tenants or not, have the concept of a user.  Commonly this is associated with some means of authentication and authorization on the database/application.
+
+It is good generally to have authentication handled by some trusted cloud or microservice.  Authorization can either be handle similarly or more within an application.  For SSO and other benefits it is likely that authorization also should be handled by such a separate service at least down to the level of for instare roles and permission specification.  OTOH filtering what can be done in an app or what can be done against a datastore may more speedily be done if the database system (UOP here) plays some role. 
+
+*** NPC-ish users
+Some properties of users in an app environment especially are applicable to bots and other non-human, non-business entities.  Especially pemissions and roles.   Apps and other software entities need mapping into the role & permission system. 
+
+
+
+** Role and permission architecture
+Permissions are about specific thing that the permission holder is allowed to do.  Roles group permissions.   Roles can be nested.   Another similar name for a Role might be UserGroup, that is a Group of user objects.  In UOP Groups always nested.   But Roles group permissions and other Roles rather than users. 
+
+For users to have permissions they must be associated with one or more Roles. 
+
+Another way some of this functionality gets handled in web based apps is by different auth information in headers on requests to such a system.  But logitally that different auth information maps to implicit or explicit roles.  
+
+
+*** TODO figure out precisely what auth mechanisms to use. 
+    SCHEDULED: <2021-04-10 Sat>
+
+
+** Schema[s]
+
+A schema is a specification for some metadata, typically classes and attribute but also possibly other metadata types as well.  A schema can
+use/derive from one or more other schemas.    A schema is a metadata spec for an application or a database as to what metadata it represents.
+It is mainly for convenience of specifying what an application needs or expects and doing bulk update of database metadata. 
+
+*** Questions
+**** metadata definitely can't conflict in id but can conflict in name possibly be tolerated?
+This would make it easier for different applications to use say classes with the same name but different definition.  As long as the metadata for
+a particular tenant/login had no conflict for lookup by name operations (e.g., queries) it is not clear we need care global to the db about 
+conflicting names.    However doing so at metadata insert/modify time would simplify administration of a UOP db. 
+
+**** Should schema itself be persisted?
+Doing so makes it easier to track what metadata is available in brief form and to build off it.  And a persisted Application needs it. 
+
+** Roadmap
+
+*** Modules
+
+**** Authorization Module
+
+Identification of user to UOP.  Generally this will be part of database connection establishing at the lower level but for an external interface with need an implementation module in UOP.  Likely a standard plugin in like OpenId.
+
+**** File Storage (TBD)
+
+Some user assets that are at least referred to by UOP may be file like things.  There are two cases
+ - external file system equivalents such an Google Docs, Dropbox  - UOP simply stores urls for these as appropriate
+ - local files - for dependable access UOP may need to store these somewhere in the cloud.  There are services for this. 
+
+**** Database Module
+
+This is the fundamental UOP core component implementing generic database for UOP persistence.  It is designed to specify an adaptor API that can be specialized for any particular type of store.  
+
+Persistent stores are modeled as supporting some kind of connect mechanism, transactions support and the store as a set of persistent collections. A generic CRUD interface is implemented on top the collection type for the particular store. 
+
+
+Full Query support is ipmlemented on top of this abstraction. 
+
+**** Database Adaptors
+
+Adaptors to make particular types of datastores work with UOP.
+
+**** Communication Module
+
+This supports communication with clients.  It will include a minimum of a zeromq interface and and HTML interface.   
+
+**** Access Control Module
+
+Access Control for support of multiple users of the same logical database.  
+
+**** Client Language SDK
+
+This is language specific SDK as transparent as possible for persisting objects/structures of that language and any relationships between them and tagging and groups as are desired. It includes support for transactions grouping changes as one atomic update and for getting changes (as changesets) from the database.  
+
+*** Schedule
+**** Phase 1:  Authorization, Persistence, Communication, Database Adaptor
+     SCHEDULED: <2015-10-31 Sat>
+Effective multi-tenant single user UOP.  This covers most application types that have only one user without shared data including many types of web, mobile and desktop applications. 
+This phase supports only HTML and ZeroMQ client access.  It does not include any Client Language SDKs but makes it rather easy to write such.  These could possibly be open source projects initiated by ConceptWare or not. 
+This phase is planned as the most bare bone implementation possible that covers the functionality.   It will include the general Database Adaptor API and one implementation for a specific type of datastore  (likely Mongo with Postgresql nearest contender). 
+While this phase is single user it must include the possibility that a user has more than one session running such as a program modifying user data on the user's behalf or simply more than one app to the user data open at once.
+Target Date:   2nd Quarter 2015
+
+**** Phase 2: UOP Appliance:  
+     SCHEDULED: <2015-11-30 Mon>
+This phase builds out a UOP middleware for applications to interact with.  Given the outputs of Phase 1 it may or may not prove desirable to build this phase before Phase 3 below.  It is compelling for shared data desktop applications.   It presumes Client Language SDK for some mix of client languages.  
+It is also dependent on the first internal applications built on Phase 1 and how many resources are available to do the required components of this phase.  It also depends on Access Control although a bit more localized to users on the machine.   
+Target Date:  4th Quarter 2015 ??
+**** Phase 3: Social
+     SCHEDULED: <2016-03-31 Thu>
+Social includes Access Control and sharing of common data.    This will support group interrelated data creation and sharing. 
+Target Date:  1st Quarter 2016
+** Detailed Design
+
+*** Database Abstraction
+
+**** Datastore Independence
+
+UOP abstracts the back-end database layer to provide common abilities needed by UOP internals.  Basically the underlying datastore is used as the source of data that is cached and shared as needed by applications.  At UOP transaction boundaries any changes made by the transaction are written back to the underlying store.   The store abstraction includes a model for the metadata about the datastore contents, API for query support and retrieval of objects, related objects, tagged objects and query support.  Any backend datastore can be used for which an adapter can be created that supports this DataStore API.    In practice additional properties such as database scaling and distribution may be desired and drive choice of underlying data store technology.
+
+Datastore collections/tables are modeled as a generic CollectionWrapper.  Such CollectionWrappers are core to database commont collection/table type operations and encapsulated the details of such operation for a particular type of datastore.   
+
+Inherent to UOP is the ability to use multiple different datastores concurrently.  Effectively this is an aggregated datastore that appears the same as any other datastore to clients of UOP.  Thus UOP may include relationships between objects that span datastores and objects may be moved between UOP datastores with no loss in capability but possibly some loss to latency and more complex transaction/change handling.  But this complexity largely is "simply" a matter of exchange of the appropriate Changesets.
+
+**** Metadata Handling
+
+The metadata includes the properties of all Attributes, Classes/Types, inheritance among Classes/Types, Relationships, Tags and Groups.  Given the presence of this information in a datastore UOP can use that database.   
+An interesting set of questions arise about metadata, the set of classes, relationships and tags, that are germane to any session interacting with UOP and databases.  All such concerns are related to proper context for a particular session.  A session may have multiple working databases, or just one.  A session has a defined set of classes, tags and relationships.  So how should this session metadata and database information interact.  Consider two cases:
+There is only one database in the session.  
+There are multiple databases in the session.
+
+In case 1,  it is clear that the persistent source and sink for the metadata is the active database.  So it would be convenient if the database kept the database map. Case 2 at first looks quite different, as if somehow the metadata map is separate from all databases but perhaps is used by all of them for both source and sink.    How can this at first seemingly different situation be resolved?  The most consistent way leading to high use is by creating a CompositeDatabase type that acts like a single database to most of the code but within itself pulls metadata and other information from several sources and distributes changes to that information.  
+So in both cases we get to an internally consistent implementation model where there is only one active database for a session and it owns the session metadata.  
+**** Caching
+UOP caches as much as possible.  Persistence needs today range all the way from mobile single app support to desktop multiple app support to networked machine support to cloud.   
+
+UOP enables full object persistence across all these domains.  It enables connecting a mobile app directly to the cloud for backup with the mobile app acting as a cache for the cloud data effectively.  It supports multi-threaded process apps with local in memory caching or shared memory caching as well as disk (backend datastore) on the machine.  The local disk (if any) is a logical cache of the cloud backed data.   Changes write through as many layers of "cache" as are connected.  Requests for objects not present are forwarded to the next layer until the object is found and retrieved or there are no more layers to check.
+
+The movement between machine and cloud is one of ChangeSets (see below) not individual objects and rolesets.   Changes from the cloud are received quasi-automatically.  Local sets of changes are pushed to the cloud if cloud services are connected.  if a middleware solution is deployed then changes from each application update the middleware cache which updates the actual underlying data store and sends the changeset to the cloud. 
+
+**** Transactions
+
+A single level transaction model is supported down to the individual application process and thread level.  A UOP application language adapter provides the means for automatic association of a transaction action context with the space.  The language API provides automatic where possible and manual where not hooks that track changes to the properties, tags and relationships of and between persistent objects.  On an abort all changes are removed.  On a commit the changes are applied up cache and to the underlying data store.   
+
+**** Change Sets 
+
+A ChangeSet is used to track changes.  It can be for a single transactions or all changes since a particular time in the ChangeSet history.  in the later case the set of ChangeSets is rolled up into one overall ChangeSet.     ChangeSets are used to communicate from process to datastore (on commit) and from machine to cloud and from cloud to machine.    In a webapp they can be used between the backend and the client.  ChangeSets are applied by the recipient to its local cache and storage.  In addition ChangeSets are logged at the local machine level and on the cloud. 
+
+Changesets allow the playback of changes to the datastore[s] over time and the recreation of earlier states.  
+
+A ChangeSet has similar structure to a datastore in terms of metadata types and association types.  But for each type it contains insertions, modifications and deletes rather than current data. But a changeset over sufficient time is quite equivalent to the datastore data as over time all subsequent mods and deletes effect the insertions or their very existence such that only undeleted insertions with current state exist.    So the datastore is the summation over all changesets in a non-changeset format.
+
+Changesets can be over different subdomains of a larger domain.  For instance one way to support multi-tenancy is by per logical user subcollections within a single datastore.   There can be changeset collections over any such sub-population of data that we desire.   And other changesets that are across all such domains for a particular physical datastore.  And still others that unite many physical datastores.  But note that the larger ones can be composed from the disjoint parts of the smaller ones.   Thus arbitrary sized audits and datasets can be attained.
+
+This dovetails with a UOP extension of relationships and references between many disparate databases. 
+
+** UOP Directional Change Propagation
+
+Changeset movement does not need to be done in arbitrary directions if we presume some sort of multi-layer logical caching.  For instance an app on my mobile device is unlikely to want more than a subset of information from the logical joint datastore on my desktop[s] or the cloud.   So we can look a the needs of the app as being for a cached subset of information from a larger store.   And we can look at the desktop datastore as a cached subset of the cloud although it may well have some data that it does not also store in the cloud.   
+
+Then there are flows of infomation upward toward larger stores and downward toward smaller caching stores.   Downstream stores may pull from the upstream store at will.  The Upstream store receives updates of data (changesets) from downstream.   It also receives data requests from downstream.   If the upstream server keeps track of which items and associations are thus share with downstream stores then it can push changes recieved from other sources down to such stores keeping them updated (in an eventual fashion).  
+
+A downstream store can also request all changes from upstream stores since a given local time (requester epoch time).   This request can be delimited to what the upstream store knows the requester has in the past been known to be interested in of what it contains.  
+
+** UOP Usage Scenarios
+*** Mobile to laptop and/or cloud
+
+Obviously we can support very clean and consistent data exchange between mobile and cloud.  It is possible to create a service offering an embedded UOP for mobile which acts as a changeset streaming cache to the user's UOP in the cloud. The service could on create separate logical cloud stores on a per app and or per user basis.
+
+
+** Product Ideas
+*** Mobile database with cloud backing
+*** UOP SaaS in the cloud
+*** UOP PaaS with Application Integration package support
+*** UOP deployment/tuning consulting
+*** UOP infomedia stuff 
+*** UOP talks
+*** UOP specialized clients
+
+** Backend Query format
+{ name, description, _id, 
+  { <conjunction>: 
+    [
+      <subqueryObjects>*
+    ]
+  }
+}
+*** Conjunction $and | $or
+*** Subquery objects
+**** {$and : [<subqueryobject*]}
+**** {$ord : [<subqueryobject*]}
+**** {$
+** Query processing
+*** Operators
+**** {<rel-op>: {<prop-name>: <value>}
+Where <rel-op> is one of $eq, $ne, $gt, $ge, $lt, $le, $like, $range
+**** {$type: <class>}
+**** {$tagged: <tag>}
+
+Is tagged with tag.
+***** or {$tagged: {<any | all | none>: [<tag_name>*]}}
+**** {$grouped: <group name>}
+Is directly in group.
+**** {$grouped*: <group name>}
+Is directly or indirectly in the group.
+**** {$related: object}
+All objects related to object by any role.
+**** {related: {<role>: <from-object | None}}
+Objects related to the from-object by role or related at all by role if no from-object.
+*** Processing & optimization
+**** $and
+$and distributes over each of the and clauses but only practically regarding type as all but combinations can be limited by type.  
+Any empty or false result in an $and short circuits.
+**** $or
+
+$or requires evaluating all of its clauses.
+Due to these extra costs it is generally better to process $or causes late where possible.
+**** $not
+
+$not is strange. It can mean all objects except those that satisfy the clause.  
+When possible $not should be used to negate the clause as the result is likely to be cheaper to evaluate.  
+But this implies and is consistent with another view of $not which is that the result is the complement of the clause results limited to the domain that clause executes over. 
+
+***** examples:
+{$not: {$grouped: <group>}} returns all grouped objects that are not directly in the given group.
+
+{$not: {<name> : {rel-op: value}}} inverts the relation for the six general rel-ops. Thus it returns objects from the same domain (type or types having property named <name>) that do not satisfy the clause. 
+
+
+**** processing 
+***** $and
+****** compute and spread type downward if present
+****** do and gathering on sub-queries
+***** $or
+****** do and combine all subqueries
+***** $not
+****** negate clause
+***** anything else
+single condition possibly applied to many tables (property relation).
+***** $type
+If in an $and with other clauses then it is blended into them. 
+If standalone then it signifies a type, possibly recursive.
+
+
+* changeset addendum
+
+** merging changes across deletes
+
+If we simply rolled up changes as is then we would miss anything that is done at database apply level instead of in changeset propert.  For instance deleting a class would not delete things that referenced that class such as associations that were in an earlier changeset than the one containing the deleted.  Ditto inserts and so on.   So we must apply the same sort of logic that we use when updating the database when we roll-up changes.  
+

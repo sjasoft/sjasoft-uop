@@ -1,0 +1,270 @@
+
+* BACKLOG Relationship to Group question.
+If relationships involving groups are present then it enables some faster entry and more powerful relationships.  This can be seen as a subset of a general implied relationship capability where X being true implies relationships Y* with X in this case being group membership.
+
+All of these cases might be much simpler with more graph algorithms implement in UOP or run against a graph database. 
+** Issues and Difficulties
+*** removal from group
+Perhaps some relationships need to be maintained for what was removed from group and the steps to do this are disjointed from the removal act and may be missed. But this isn't a big deal
+*** implementation
+Finding related items requires traversing group membership, possibly recursively, making related object operations and any other graph algoritms much more inefficient.   That is it does if the group implication is not instantiated as explicit object relationships.
+
+All implications need to be explored keyed by facts about a change of state in order to created the results of those implications or we need to do the same work in reverse on every query.
+** Group containment of groups or items as relationship
+This would require multiple "class" where class is group scans of related collection. For subgroup would need query for subject AND object "class" being metagroup.
+** Tagged as relationship
+subject - has_tag -> tag
+This one is simple non-recursive search until subtags are considered.  Which is no worse than the separate tagged table case.  
+
+* ACTIVE update async db_collection
+SCHEDULED: <2023-02-01 Wed>
+* Ouery Tasks
+** TODO ensure fetch from db correct
+** BACKLOG query shared?
+Currently queries are part of shared content when in fact queries likely have both shared (app defined) and tenant specific instances. Is this any more true than for other metadata?  It really depends on the app/product.  Some will have a lot of pre-defined queries for business functionality that they want available to all clients/tenants.  Others will offer as part of product client/tenant ability to write their own queires.  So supporting both is important.
+* Query Tests
+** DONE test dict conversions
+CLOSED: [2023-06-22 Thu 15:52]
+:LOGBOOK:
+- State "DONE"       from              [2023-06-22 Thu 15:52]
+:END:
+** Basics
+*** TODO Test query mod
+*** TODO Test query delete
+*** TODO test client query creation & mod
+** Queries
+*** TODO build test data
+*** TODO testa all query types
+* DB Adaptors
+*** TODO set instance_collection in classes in collections
+Actually this should never be done BECAUSE in the multi-tenant in same db case each tenant will have its own instance collection name.
+Therefore drop this field and all use of/dependence on it.
+The db_inferface though is tenant specific.  It has its own collections IFF there is a specific tenant. Therefore then is no harm in setting this field after all.
+**** BACKLOG test this carefully in tenant testing!!
+** SQLITE Adaptor
+Very important for desktop and mobile executables.  But is there a way around this with the appropriate installer?  Yes for desktops perhaps. Not so much for mobile to best of my knowledge.
+*** TODO uop_client test failure
+SCHEDULED: <2024-07-16 Tue>
+The problem seems to be that the long transaction mechanism used is not resulting in an a actual write to the database of the data created in WorkContext.  I am suprised by this as the problem did not appear during testing of db_interface.
+Some possibilities to check:
+**** client testing creates data differently?
+**** db_interface testing didn't actually exercise and test long transaction mechanism?
+**** long transaction mechanism is mis-coded?
+***** TODO check sqlalchemy docs on proper form
+**** somehow the data was not written to db I think it was?
+
+** BACKLOG General Relational Adaptor
+For python this would likely be build around sqlalchemy.
+? Any loss on sqlalchemy build if I just use sqlalchemy instead?
+Possibly it would take longer to do general sqlalchemy solution?
+
+** BACKLOG Postgresql special adaptor?
+It is a "post-relational" db so seems justifiable
+* BACKLOG Cached DB
+Need to support local db as cache to cloud db. Commit changes to either update (lazily from server to desktop) other. 
+
+* BACKLOG fully test tenant
+  
+* BACKLOG direct zmq interface
+* The async db question
+Some async database interfaces warnt to be async for almost all operations.  UOP has meta self-descriptive information in the database.  It would be best not go async for accessing this information.   The question is whether it is worth it to have both async and non-async database connections to handle such things efficiently.
+** simply loading all the meta information
+This is likely not a large problem because this information is small and can be loaded once
+for any particular tenant at database startup.  If after this the meta information is kept up-to-date in memory for the session there may not be a problem.  That is what schemas.meta.MetaContext does.
+** update meta information
+As this updates all the way out to the database it should wait.  And it is part of the apply_to_db loop so of course it would.
+** add a tenant is one such update but not really special in connection to db relevant ways.
+** DONE make sure the metacontext update is async and initial is async
+CLOSED: [2022-12-17 Sat 21:06] SCHEDULED: <2022-12-04 Sun>
+:LOGBOOK:
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-12-17 Sat 21:06]
+:END:
+
+- State "DONE"       from "TODO"       [2022-12-06 Tue 21:27]
+:E
+problem is that we pull standard collections on at a time. Unless we pull them in a batch there
+will be issue of sometimes getting async collection.  Another alternative is to disambiguate them on the get, etc operations but that seems an unlikely path with its own ugly wrinkles.
+* Ensure base schema
+Question is why this should be up in the service level rather than being a build in part of creating or initializing a database.  In short why does it need to be up this high?  Yes we do need an ensure_schema somewhere up here that is at least a wrapper for the database one, but why should Services.__init__ know abotu this detail?
+** DONE resolve this sync and async
+CLOSED: [2022-12-17 Sat 21:07]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-12-17 Sat 21:07]
+:END:
+retest the sync case to ensure against breakage
+SCHEDULED: <2022-12-05 Mon>
+* 
+* Attribute type validators and more types
+** DONE need numeric types
+CLOSED: [2022-12-17 Sat 21:07]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-12-17 Sat 21:07]
+:END:
+# 
+** BACKLOG consider list and dict types
+** DONE add validators for class instance client creation
+CLOSED: [2023-01-26 Thu 15:22]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2023-01-26 Thu 15:22]
+:END:
+* Query other class impliers
+** Attributes
+Obviously attributes can only apply to classes that have those attributes.  But what of dynamic attirbutes if implemented?  Dynamic attributes must exist in some mapp of obj ids and dynamic attribute names and thus also imply the classes these object ids are in. 
+
+** BACKLOG add not handling to query
+  SCHEDULED: <2016-07-27 Wed>
+** DONE add class spec handling to query
+  SCHEDULED: <2016-08-15 Mon>
+** DONE add class filtering in $and processing
+  SCHEDULED: <2016-08-20 Sat>
+* BACKLOG make good user writeup
+* DONE check query with format
+* DONE MetaContext / Schema minimal diff
+CLOSED: [2022-11-11 Fri 19:08] SCHEDULED: <2022-10-08 Sat>
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-11-11 Fri 19:08]
+:END:
+Compute minimal changeset to bring context (of current db) inline with
+desired context, usually from schema that should be reflected in db metadata
+* TODO resolve the application update
+  SCHEDULED: <2022-09-29 Thu>
+There are two cases
+ - ensuring the saved version of the app matches the canonical one. if not update saved copy and existing users that use it
+ - ensuring a particular user has the latest version
+Clearly the first makes use of ability of the second. 
+
+A challenge currencly is around classes and their attributes.  Original thinking was that the attr_ids could be in class and converted once by some naming lookup as a direct id to id map was not so easy.  However keeping such a map persistently in the case of installed apps may be a much more tractable idea.  For one thing the attributes across classes may have shared names but different ids.  So you would have to do a dance through classes to their attributes which is a bit clumsy.  
+* TODO design uop_user builtin
+- requires username
+- requires email?
+
+  In some ways it would be very convenient to have uop_user be normal class/instance. Easier for
+  relationships and user grouping etc.  This goes to idea of some special class ids as well.  Compromise is to have uop_ suffix as class name part of general id for relationship etc. * TODO fix metadata gathering
+SCHEDULED: <2022-09-25 Sun>
+
+** DONE ensure database has superuser
+** TODO ensure tenant superuser/admin
+** BACKLOG new metadata gathering
+SCHEDULED: <2022-09-28 Wed>
+By new scheme there are two types of metadata - those with owner equal to database owner and those with owner equal to some tenant-id.  These are kept disparate.  So to get metadata for a non-tenant only the database owned metadata is used.  To get it for a tenant the union of database owened and tenant owned metadata is returned. 
+
+Actually this likely should be more subtle in that a schema should be able to refer via superclasses to parts of other schemas without necessarily including the entire other schema. Yet what is the harm of including this metadata?  Permissions to access class instances or to update schema should not be conflated with what metadata is pulled in.
+    
+* TODO Testing
+** testing changeset
+*** needs
+**** schema
+**** rondom instances from schema
+**** test meta insert, modify, delete
+**** test assoc insert delete
+**** test object delete
+**** test class delete
+**** test changeset combination
+** testing DBI
+*** needs 
+**** schema
+**** random instances
+**** working changest
+**** db adapter
+**** schema to/from db testing
+**** working collections
+**** random instances persisted
+**** checking that all instances retrieve properly
+**** testing changeset modification of db
+**** testing retrieving and bleding changesets
+**** test w/ and w/o tenant
+** testing query in memory
+*** needs
+**** schema
+**** random instances
+**** working dbi
+**** persisted random data
+**** testing class base criteria
+**** testing assoc criteria
+**** testing object conditions
+**** testing and
+**** testing or
+**** testing against object set
+** TODO finish schema/app 
+There is some interesting stuff to resolve here regarding Schema vs Application.  An App is in many ways completely orthogonal to UOP persistence.  An App requires some overall Schema which may include schema components from one or more Schemas.  But an App is not the source of any Schema but a user of Schemas or rather their components
+*** TODO create Schema abstraction.
+Is it certain that we even need this container for various metadata?  Schemas may intersect one another in various ways.  Perhaps their is only Metadata at a point in time.  Yet it is useful to define Schema needed for any particular application or purpose and to have means of specifying and actualizing such when needed.  
+
+NOTE: A MetaContext pretty much is the in-menory form of a Schema
+
+**** The problem of schema collisions / incompatibilities
+It is possible two or more schemas define metadata of same name but with different characteristics.  Names must be unique for schema components (except possibly queries).  We could punt and further uniquefy the name with a namespace of the schema name.  We could say the schema name is always optional part of the true name of metadata item.   But to be safe we would need to ensure everywhere the name is used it is fully qualified internally.   
+
+**** Always present Schema components
+Some classes and attridbutes are always present in every UOP system.  These do not require qualification and it is not allowed to override them.   Or is this really necessary?  Why can't a user/app express a desire to add some extra field to PersistentObject for instance? 
+
+This is similar to notion of tenant having ability to modify parts of schema for its own needs.  Where this is allowed, at least for adding attributes to classes, it provides extension of structure without redefinition of entire classes. 
+
+***** TODO make tenant specific versions work with immutable parts
+Current collection implementation gives each tenant its own copy of every component, especially classes. 
+
+** TODO update tests for async version
+** TODO revisit general test environment
+*** TODO clean up stuff that no longer makes sense
+*** TODO improve way temp data is produced for testing database basic sanity
+In particular use pydantic stuff and its ability to produce random matadata and associations.   Also update the use of pure dicts and other patterns.
+**** update dbi for new metadata source
+*** TODO use testxxxxx user
+    SCHEDULED: <2021-02-25 Thu>
+much better than temp database.  Idea is to use multi-tenant user pattern.  Also has the advantage that some of first products on UOP will need multi-tenant. 
+** TODO test what happens with multiple apps with same class names
+Only applicable if multiple apps are loaded on a database which is a specialized case.  But generally shouldn't make a difference if there are no differesnces in the definitions of the classes.  The entire space of some sea of class defs from which apps can be formed needs to be thought through.  I think the main trouble making part is the app centric focus.   Apps ideally should be on top of main structure rather than defining it outright.  Especially for databases useful across multiple application spaces and for multiple uses.  Apps schemas as additionls and refinements rather than primary definers?  
+** TODO test that new application gets added to default user
+why is there any concept of 'default user'?  If there is no user, rather tenant, specification then it is added to main meta level. 
+** BACKLOG fully test the web api
+   SCHEDULED: <2021-03-12 Fri>
+   ty
+** TODO db initialization
+There are a few things that need to be ensured are in the target database for UOP to function.  
+*** TODO db description
+*** TODO UOP classes exist
+*** TODO PersistentObject installed
+only one of these. That is PersistentObject class is shared across tenants, if any, 
+*** TODO at least 1 app installed?
+In most cases yes but should this be ref to something held on per tenant basis?  Probably but do later
+
+* TODO update service for change
+** TODO test app insert
+*** new database
+*** install pkm_app
+*** check metas
+*** check app
+*** check app admin
+*** TODO get apps
+*** TODO upgrade tenant metas
+
+* Incorporate pydantic
+** DONE new query model
+** TODO incorporate new query in dbi
+** TODO update changeset relative stuff especially application
+Some of these are known to use the older meta popo class versions especially regarding associations.  
+Some of this is messy as it assumes fields in Assoc types for class of objects. I remember making this decision to make it easier/possible to remove from assoc collection when a a class is removed.  Which is admittedly an uncommon thing to do.   Debatable whether this uncommon thing should be inefficient or we should inefficiently reserve space for class ids in assoct collections.   
+The field does make possible some other interesting things like finding everything associated with object that also is of a given class efficiently.   But I am pretty sure this capability is not directly taken advantage of. 
+If 
+ - object ids are class id first
+ - database in question has efficient prefix string LIKE functionality
+then we don't need to store class ids is assoc collections.  
+HMMM...
+
+*** TODO fix old meta class use in DBI as well
+** TODO incorporate building MetaContext or better in dbi
+SCHEDULED: <2022-09-25 Sun>
+** TODO resolve relationship between collections and MetaContext
+Before the collections were used more directly.  Going forward plan is to just use this from memory.  There may be a hit to memory if many users on same server processo.  But that can be taken care of with horizontal scaling.  And doing this simplifies a lot of logic in dbi as there is no need to keep going to the database everytime we need Meta information. 
+We will go to database for tagged, grouped, related and of course instance queries as those can be larger.
+Actually there is still need for the collections exposed even to collect metadata instance.  Or I could perhaps make collecting the metadata part of setting up or ensuring those instances in the first place. 
+* TODO tenants share all app schemas
+A tenant may have some of its own classes as well but it shares all App classes, etc that the tenant has available.
+The difficult case here is PKM where ever customer/tenant can define new classes but has all pkm_app App stuff in common.  Consider other Apps installed. 
+* Thoughts
+** async vs sync
+functions called simply need an await
+what calls them needs async
+seems like their should be some decorator or procedure to have same code 
+but with the added bits.  Would likely be easy enough in true macro language like Lisp.  Not so sure you could get there in python.

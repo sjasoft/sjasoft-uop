@@ -1,0 +1,22 @@
+* Query  
+
+Every query has a single component which is either a compound query (and or or) or a single non-composite query component.  
+
+** Nested components
+
+
+
+** Class Context in Compound Queries
+
+All child components of a compound query require evaluation of child components  within a context of effective classes.  This context may change within nested compound components
+
+
+
+*** AND Composite Query Component
+
+If any of the child components specify class context then the set of objects can be simplified by the class context effective across the AND.  Additionally, because it is an AND, We can short circuit if multiple children specify conflicting class contexts.  Thus in evaluation of an AND the effective class context should be computed first for use as a filter of results from other children or to short circuit the entire evaluation. 
+
+*** OR Composite Query Component
+
+In an OR each child is really separate and we use the union of all children evaluation results 
+

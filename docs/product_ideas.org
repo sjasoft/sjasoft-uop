@@ -1,0 +1,35 @@
+* Product Ideas
+
+** Mobile database with cloud backing
+
+This depends on the caching properties of UOP.  Which in turn requires periodic or websocket equivalent receipt of update information.
+
+A consideration is whether the upstream repository is aware of precisely what the downstream clients care about.  This could be difficult to guarantee if we have multiple 
+
+** UOP SaaS in the cloud
+
+Particularly useful to smaller projects and on well tuned backends.
+
+** UOP PaaS with Application Integration package support
+
+It is possible of course to build countless kinds of applications around the basic ideas embodied in UOP.
+
+
+** UOP infomedia stuff 
+
+** UOP talks
+
+*** Open Source Conference 
+
+Ideal for launch as open source project.  Can I carry off at least a one hour presentation?  Easily.  There is a lot to say about UOP. 
+
+*** YouTube
+
+** UOP specialized clients
+These are for different languages.  They can be rather barebones or taking advantage of more specific language features.  First will be general clients for python and node with emphasis on needs of desktop app and needs of webapp respectively.
+
+Most interesting question is how much to build out ORM features like language specific persistent class definition mechanism. Although a desktop gui that includes class definition is the punting position. 
+
+** UOP consulting
+
+If this is as good for multiple types of apps and resolves database dependency well then there should be a market for expertise in UOP training, integration and solution providing. 

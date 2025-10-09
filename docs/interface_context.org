@@ -1,0 +1,10 @@
+* Interface and context
+
+An Interface provides UOP services across one or more UOP supporting databases.
+
+A UserInterface in a UOP Interface limited to what a particular user can interact with.  It is effectively a single user View on an Interface.
+
+**  Regarding lookups of metadata
+  
+
+
