@@ -1,10 +1,12 @@
 from sjasoft.utils.category import binary_partition, identity_function as identity
+from sjasoft.utils.dicts import first_kv
 from collections import defaultdict
 from functools import reduce, partial
 from sjasoft.uopmeta.schemas import meta
 from sjasoft.uopmeta import oid
-from sjasoft.uop import utils
-from sjasoft.utils.cw_logging import getLogger
+from sjasoft.utils.tools import a_set_and, a_set_or, set_and, set_or
+from sjasoft.utils.logging import getLogger
+import asyncio
 
 logger = getLogger(__file__)
 
@@ -14,10 +16,11 @@ def propVal(op, prop, val):
 
 
 class Q:
-    '''
-    Simple query builder trying to app part of what Django has.  It is primarily used 
+    """
+    Simple query builder trying to app part of what Django has.  It is primarily used
     for building class instance queries without relationships.
-    '''
+    """
+
     @staticmethod
     def query_function(query):
         """
@@ -25,76 +28,79 @@ class Q:
         @param query: the query to evaluate
         @return: a function that can be used to evaluate a query against a dictionary
         """
-        def _and(functions: list[callable]):                
+
+        def _and(functions: list[callable]):
             return lambda x: all(fn(x) for fn in functions)
-    
-        def _or(functions: list[callable]):                
+
+        def _or(functions: list[callable]):
             return lambda x: any(fn(x) for fn in functions)
 
         def operator_function(key, value):
-            
-            ops = '$gt', '$lt', '$gte', '$lte', '$eq', '$neq', '$regex'
+            ops = "$gt", "$lt", "$gte", "$lte", "$eq", "$neq", "$regex"
             if key != ops:
                 temp = {key: value}
-                key = '$eq'
+                key = "$eq"
                 value = temp
             prop, val = first_kv(value)
             ops_map = {
-                '$gt': lambda x: x[prop] > val,
-                '$lt': lambda x: x[prop] < val,
-                '$gte': lambda x: x[prop] >= val,
-                '$lte': lambda x: x[prop] <= val,
-                '$eq': lambda x: x[prop] == val,
-                '$neq': lambda x: x[prop] != val,
-                '$regex': lambda x: re.search(val, x[prop]),
+                "$gt": lambda x: x[prop] > val,
+                "$lt": lambda x: x[prop] < val,
+                "$gte": lambda x: x[prop] >= val,
+                "$lte": lambda x: x[prop] <= val,
+                "$eq": lambda x: x[prop] == val,
+                "$neq": lambda x: x[prop] != val,
+                "$regex": lambda x: re.search(val, x[prop]),
             }
             return ops_map[key]
-            
-            
+
         key, value = first_kv(query)
-        functions = [query_function(i) for i in value] if key in ('$and', '$or') else [operator_function(key, value)]
-        if key == '$and':   
+        functions = (
+            [Q.query_function(i) for i in value]
+            if key in ("$and", "$or")
+            else [operator_function(key, value)]
+        )
+        if key == "$and":
             return _and(functions)
-        if key == '$or':
+        if key == "$or":
             return _or(functions)
         else:
             return functions[0]
 
     @staticmethod
     def gt(prop, val):
-        return propVal('$gt', prop, val)
+        return propVal("$gt", prop, val)
 
     @staticmethod
     def gte(prop, val):
-        return propVal('$gte', prop, val)
+        return propVal("$gte", prop, val)
 
     @staticmethod
     def lt(prop, val):
-        return propVal('$lt', prop, val)
+        return propVal("$lt", prop, val)
 
     @staticmethod
     def lte(prop, val):
-        return propVal('$lte', prop, val)
+        return propVal("$lte", prop, val)
 
     @staticmethod
     def eq(prop, val):
-        return propVal('$eq', prop, val)
+        return propVal("$eq", prop, val)
 
     @staticmethod
     def neq(prop, val):
-        return propVal('$neq', prop, val)
+        return propVal("$neq", prop, val)
 
     @staticmethod
     def of_type(clsName):
-        return {'$type': clsName}
+        return {"$type": clsName}
 
     @staticmethod
     def tagged(spec):
-        return {'$tagged': spec}
+        return {"$tagged": spec}
 
     @staticmethod
     def grouped(spec):
-        return {'$grouped': spec}
+        return {"$grouped": spec}
 
     @staticmethod
     def related(object, role=None):
@@ -107,15 +113,15 @@ class Q:
         @param role - optional specific role
         @return - list of related object uuids
         """
-        return {'$related': (object, role)}
+        return {"$related": (object, role)}
 
     @staticmethod
     def all(*clauses):
-        return {'$and': clauses}
+        return {"$and": clauses}
 
     @staticmethod
     def any(*clauses):
-        return {'$or': clauses}
+        return {"$or": clauses}
 
 
 def split_clause(clause):
@@ -131,15 +137,19 @@ async def evaluate_classes(dbi, classes, to_filter=None):
     if to_filter:
         return {i for i in to_filter if oid.oid_class(i) in classes}
     else:
-        async def cls_find(cid):
 
+        async def cls_find(cid):
             coll = await dbi.extension(cid)
             return await coll.ids_only()
 
-        return await utils.a_set_or(cls_find, classes)
+        return await a_set_or(cls_find, classes)
 
 
-property_operations = ('$gt', '$lt', '$gte', '$lte', '$neq', '$eq')
+property_operations = ("$gt", "$lt", "$gte", "$lte", "$neq", "$eq")
+
+
+async def a_set_or(fun, items):
+    return reduce(lambda a, b: a | b, asyncio.gather(map(fun, items), set()))
 
 
 class NegatableSet(set):
@@ -166,7 +176,7 @@ class NegatableSet(set):
         not_both = self_negated ^ other_negated
         if not_both:
             # TODO think on whether there is a better way
-            logger.warn('ignoring to expensive not clause in OR concext')
+            logger.warn("ignoring to expensive not clause in OR concext")
             return other_set if self._negated else self
         else:
             raw = super().__or__(other_set)
@@ -217,26 +227,26 @@ class ComponentEvaluator:
             return set()
 
         if isinstance(component, meta.TagsComponent):
-            assoc_ids = self.get_named('tags', component.names)
+            assoc_ids = self.get_named("tags", component.names)
             associated = self.dbi.get_tagset
             obj_assocs = self.dbi.get_object_tags
         elif isinstance(component, meta.GroupsComponent):
-            assoc_ids = self.get_named('groups', component.names)
+            assoc_ids = self.get_named("groups", component.names)
             if component.include_subgroups:
                 pass
             # TODO need group tree for subgroups in meta
-            kinds = 'groups'
+            kinds = "groups"
             associated = self.dbi.get_groupset
             obj_assocs = self.dbi.get_object_groups
 
         if self._object_ids:
             assoc_map = {oid: set(await obj_assocs(oid)) for oid in self._object_ids}
-            if component.application == 'all':
+            if component.application == "all":
                 test = lambda s: (s & assoc_ids) == assoc_ids
                 return {k for k, v in assoc_map.items() if test(v)}
-            elif component.application == 'any':
+            elif component.application == "any":
                 return {k for k, v in assoc_map.items() if v and assoc_ids}
-            elif component.application == 'none':
+            elif component.application == "none":
                 return {k for k, v in assoc_map.items() if not (v and assoc_ids)}
             return set()
         else:
@@ -246,11 +256,11 @@ class ComponentEvaluator:
         eval_tag = lambda tag: self.dbi.get_tagset(tag)
         tag_ids = [self.metacontext.tags.by_name[t][id] for t in component.names]
         raw = set()
-        if component.application in ('any', 'none'):
-            raw = await utils.a_set_or(eval_tag, tag_ids)
-        elif component.application == 'all':
-            raw = await utils.a_set_and(eval_tag, tag_ids)
-        if component.application == 'none':
+        if component.application in ("any", "none"):
+            raw = await a_set_or(eval_tag, tag_ids)
+        elif component.application == "all":
+            raw = await a_set_and(eval_tag, tag_ids)
+        if component.application == "none":
             return NegatableSet(raw, True)
         else:
             return raw
@@ -259,13 +269,13 @@ class ComponentEvaluator:
         eval_tag = lambda tag: self.dbi.get_groupset(tag)
         group_ids = {self.metacontext.groups.by_name[t][id] for t in component.names}
         raw = set()
-        if component.application in ('any', 'none'):
-            group_ids = utils.set_or(self.metacontext.subgroups, group_ids)
-            raw = await utils.a_set_or(eval_tag, group_ids)
-        elif component.application == 'all':
-            group_ids = utils.set_and(self.metacontext.subgroups, group_ids)
-            raw = await utils.a_set_and(eval_tag, group_ids)
-        if component.application == 'none':
+        if component.application in ("any", "none"):
+            group_ids = set_or(self.metacontext.subgroups, group_ids)
+            raw = await a_set_or(eval_tag, group_ids)
+        elif component.application == "all":
+            group_ids = set_and(self.metacontext.subgroups, group_ids)
+            raw = await a_set_and(eval_tag, group_ids)
+        if component.application == "none":
             return NegatableSet(raw, True)
         else:
             return raw
@@ -284,7 +294,7 @@ class ComponentEvaluator:
     async def evaluate_or(self, component: meta.OrQuery):
         evaluator = partial(self.sub_eval, class_context=self._class_context)
         fun = lambda child: evaluator(child)()
-        return utils.a_set_or(fun, component.components)
+        return a_set_or(fun, component.components)
 
     def _combine_classes(self, class_specs: meta.List[meta.ClassComponent], is_and):
         """
@@ -308,7 +318,7 @@ class ComponentEvaluator:
         by_name = self._in_context.classes.by_name
         positive = set()
         negative = set()
-        all_subs = self.metacontext.subclasses(by_name['PersistentObject'].id)
+        all_subs = self.metacontext.subclasses(by_name["PersistentObject"].id)
         pos_specs, neg_specs = binary_partition(class_specs, lambda cs: cs.positive)
 
         def clsids(spec):
@@ -324,7 +334,6 @@ class ComponentEvaluator:
 
         res = set()
         if is_and:
-
             pos = [clsids(s) for s in pos_specs]
             res = clsids(pos_specs[0])
             pos = pos[1:]
@@ -346,8 +355,9 @@ class ComponentEvaluator:
         return res
 
     async def evaluate_and(self, component: meta.AndQuery):
-        class_specs, non_class = binary_partition(component.components,
-                                                  lambda x: isinstance(x, meta.ClassComponent))
+        class_specs, non_class = binary_partition(
+            component.components, lambda x: isinstance(x, meta.ClassComponent)
+        )
         class_context = None
         if class_specs:
             class_context = self._combine_classes(class_specs)
@@ -400,7 +410,7 @@ class ComponentEvaluator:
             for cid, oids in by_id.items():
                 to_check.extend(oids)
             fun = component.obj_eval()
-            return utils.a_set_or(fun, to_check)
+            return a_set_or(fun, to_check)
         else:
             classes = []
             test = lambda cls: check_class(cls.id) and not cls.is_abstract
@@ -410,7 +420,7 @@ class ComponentEvaluator:
                 cids = [check_class(cid) for cid in self.metacontext.classes.by_id]
             colls = [self._in_context.dbi.extension(cid) for cid in cids]
             fun = lambda coll: coll.find(expr)
-            return await utils.a_set_or(fun, colls)
+            return await a_set_or(fun, colls)
 
     async def __call__(self):
         component = self._component
@@ -430,7 +440,9 @@ class ComponentEvaluator:
 
 
 class QueryEvaluator2:
-    def __init__(self, query: meta.MetaQuery, dbi, metacontext: meta.MetaContext = None):
+    def __init__(
+        self, query: meta.MetaQuery, dbi, metacontext: meta.MetaContext = None
+    ):
         self._object_ids = set()
         self._metacontext = metacontext or dbi.metacontext
         self._component = query.query
