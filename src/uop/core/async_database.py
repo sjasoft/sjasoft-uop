@@ -223,7 +223,9 @@ class Database(base.Database):
             for related in changes.deleted:
                 await self.collections.related.remove(related.without_kind())
 
-        await self.begin_transaction()
+        do_transaction = not self.in_long_transaction
+        if do_transaction:
+            await self.begin_transaction()
         for kind in base.crud_kinds:
             fn = apply_object_changes if kind == "objects" else apply_meta_changes
             await fn(getattr(changeset, kind))
@@ -232,11 +234,10 @@ class Database(base.Database):
         for extension_name in extensions_to_remove:
             self.collections.drop_extension(extension_name)
         await self.log_changes(changeset, tenant_id=self._tenant_id)
-        await self.commit()
-        await self.reload_metacontext()
-
-    async def commit(self):
-        await self._db.commit()
+        changeset.clear()
+        self._changeset = None
+        if do_transaction:
+            await self.commit()
 
     async def ensure_core_schema(self):
         await self.ensure_schema(meta.core_schema)
@@ -246,28 +247,26 @@ class Database(base.Database):
         schema_data = await schemas_coll.find(only_cols=("name",))
         return set(schema_data) if schema_data else set()
 
-    async def ensure_schema(self, a_schema: meta.Schema):
-        if not a_schema.name in self._known_schemas:
-            await self.add_schema(a_schema)
+
+    async def ensure_schema(self, schema_name:str):
+        if schema_name not in self._known_schemas:
+            a_schema = self._schema_store.schema_named(schema_name)
+            if not a_schema:
+                raise Exception(f"No such schema {schema_name} in schema store")    
+            for dep_name in a_schema.requires_schemas:
+                    await self.ensure_schema(dep_name)
             await self.ensure_schema_installed(a_schema)
 
+
     async def ensure_schema_installed(self, a_schema):
-        for name in a_schema.requires_schemas:
-            if name not in self._known_schemas:
-                known = meta.known_schemas.get(name)
-                if known:
-                    await self.ensure_schema(known)
-                else:
-                    raise Exception(
-                        f"Schema {a_schema.name} requires missing schema {name}"
-                    )
         changes = changeset.meta_context_schema_diff(self.metacontext, a_schema)
         has_changes = changes.has_changes()
         if has_changes:
             await self.apply_changes(changes)
             await self.reload_metacontext()
+        await self.add_schema(a_schema)
         self._known_schemas.add(a_schema.name)
-        return has_changes, changes
+
 
     async def object_ok(self, object_id):
         cls_id = oid.oid_class(object_id)
@@ -324,31 +323,38 @@ class Database(base.Database):
             await self.commit()
 
     async def start_long_transaction(self):
-        pass
+        self._changeset = changeset.ChangeSet()
 
     async def end_long_transaction(self):
         self._long_txn_start = 0
         self._changeset = None
+        await self.reload_metacontext()
 
     async def begin_transaction(self):
-        if not self._changeset:
-            self._changeset = changeset.ChangeSet()
-        in_txn = self.in_long_transaction
-        self._long_txn_start += 1
-        if not in_txn:
+        if not self.in_long_transaction:
             await self.start_long_transaction()
+        self._long_txn_start += 1
 
     async def abort(self):
         await self.end_transaction()
 
     async def really_commit(self):
-        pass
+        if self._changeset:
+            await self.apply_changes(self._changeset)
+        await self.db_commit()
+        await self.end_long_transaction()
 
     async def commit(self):
         if self.in_outer_transaction():
             await self.really_commit()
-            await self.end_long_transaction()
-        self.close_current_transaction()
+        else:
+            self.close_current_transaction()
+
+    async def db_commit(self):
+        pass
+
+    async def db_abort(self):
+        pass
 
     # Basic CRUD
 
