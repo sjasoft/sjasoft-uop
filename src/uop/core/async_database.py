@@ -284,7 +284,8 @@ class Database(base.Database):
         await self.collections.schemas.insert(**a_schema.dict())
 
     async def extension(self, cls_id):
-        return await self.collections.class_extension(cls_id)
+        cls = self.get_class(cls_id)
+        return await self.collections.get_class_extension(cls.dict())
 
     async def add_tenant(self, tenant: meta.Tenant):
         tenant = self.collections.tenants.insert(**tenant.dict())
@@ -336,7 +337,8 @@ class Database(base.Database):
         self._long_txn_start += 1
 
     async def abort(self):
-        await self.end_transaction()
+        self.db_abort() # TODO check this
+        await self.end_long_transaction()
 
     async def really_commit(self):
         if self._changeset:
@@ -877,9 +879,9 @@ class Database(base.Database):
     # Chngeset modifiers
 
     async def meta_insert(self, obj):
+        kind = getattr(obj, 'kind','objects')
         async with self.changes() as chng:
             data = base.as_dict(obj)
-            kind = data.pop("kind", "objects")
             chng.insert(kind, data)
         return obj
 

@@ -1,4 +1,6 @@
-
+* TODO in delete_and_check of async problem of badly defined tables
+specifically tables without "id" which implies that the attributes from superclass were not added in before the table was defined to the database.
+A very interesting question is why it took all the way until this method to fail. Surely I look up objects using id before this!  
 * ACTIVE update async db_collection
 SCHEDULED: <2023-02-01 Wed>
 * Inbox

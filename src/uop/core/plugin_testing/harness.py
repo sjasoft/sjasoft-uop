@@ -229,14 +229,8 @@ class Plugin:
 
 
 class AsyncPlugin(Plugin):
-    def get_methods(self, kind):
-        method_names = interface_methods[kind]
-        methods = [self._get_method(m) for m in method_names]
-        kv = zip(["insert", "modify", "delete"], methods)
-        return dict(kv)
-
     async def object_exists(self, obj_id):
-        return await self.get_object(obj_id) is not None
+        return (await self.get_object(obj_id)) is not None
 
     async def meta_item_exists(self, kind, an_id):
         return await self.get_kind_collection(kind).get(an_id)
@@ -257,6 +251,7 @@ class AsyncPlugin(Plugin):
                     await inserter(**data)
                     from_db = await coll.get(id)
                     assert from_db
+        assoc_add = self._random_data.random_tagged()
         for kind in assoc_kinds:
             fn = getattr(self._random_data, f"random_{kind}")
             coll = self.get_kind_collection(kind)
@@ -267,9 +262,8 @@ class AsyncPlugin(Plugin):
                 found = await coll.find_one(obj)
                 assert found
 
-    get_id = lambda obj: obj["id"]
-
     async def modify_and_check(self):
+        global context
         desc = "this is the new description"
         for kind in crud_kinds:
             if kind in ["objects", "queries"]:
@@ -285,9 +279,6 @@ class AsyncPlugin(Plugin):
                 if not from_db:
                     print("%s(%s) no in db!" % (kind, id))
                 assert from_db["description"] == desc
-
-    def get_id(self, obj):
-        return obj["id"]
 
     async def delete_and_check(self):
         db_tagged = db_grouped = db_related = self.plugin.collections.related
@@ -330,6 +321,10 @@ class AsyncPlugin(Plugin):
             data = assoc.dict()
             data.pop("kind", None)
             return await collection.exists(data)
+        
+        async def grouped_data():
+            role_id = self.plugin.role_id("group_contains")
+            return await self.plugin.collections.related.find(dict(assoc_id=role_id))
 
         obj1 = await add_class_object(a_class)
         assert await self.object_exists(obj1["id"])
